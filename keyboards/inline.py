@@ -72,10 +72,13 @@ def products_list_kb(products: list[dict]) -> InlineKeyboardMarkup:
     from database import get_available_stock_count
     for p in products:
         stock = get_available_stock_count(str(p['_id']))
-        kb.add(InlineKeyboardButton(
-            f"{p['name']} ({stock})  —  {p['credit_cost']} credit(s)",
-            callback_data=f"prod:view:{p['_id']}",
-        ))
+        
+        btn_kwargs = btn_config(f"prod_btn_{p['_id']}", p['name'])
+        # Re-attach the dynamic stock and price
+        btn_kwargs['text'] = f"{btn_kwargs['text']} ({stock})  —  {p['credit_cost']} credit(s)"
+        btn_kwargs['callback_data'] = f"prod:view:{p['_id']}"
+        
+        kb.add(InlineKeyboardButton(**btn_kwargs))
     kb.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="menu:main"))
     return kb
 
@@ -234,19 +237,26 @@ def admin_ui_button_list_kb() -> InlineKeyboardMarkup:
         ("menu_support", "Main Menu: Support"),
         ("join_channel", "Join Channel: Link"),
         ("check_join", "Join Channel: I've Joined"),
-        ("prod_buy", "Product: Purchase"),
-        ("prod_confirm", "Product: Confirm"),
-        ("prod_cancel", "Product: Cancel"),
+        ("prod_buy", "Product detail: Purchase"),
+        ("prod_confirm", "Product confirm: Confirm"),
+        ("prod_cancel", "Product confirm: Cancel"),
     ]
     for key, label in buttons_to_edit:
         kb.add(InlineKeyboardButton(f"🎨 {label}", callback_data=f"admui:edit:{key}"))
+        
+    from database import get_all_products
+    products = get_all_products()
+    for p in products:
+        kb.add(InlineKeyboardButton(f"🎨 Product List: {p['name']}", callback_data=f"admui:edit:prod_btn_{p['_id']}"))
+        
     kb.add(InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"))
     return kb
 
 
 def admin_ui_edit_kb(button_key: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("✏️ Edit Text", callback_data=f"admui:settext:{button_key}"))
+    if not button_key.startswith("prod_btn_"):
+        kb.add(InlineKeyboardButton("✏️ Edit Text", callback_data=f"admui:settext:{button_key}"))
     kb.add(InlineKeyboardButton("🎨 Edit Color Style", callback_data=f"admui:style:{button_key}"))
     kb.add(InlineKeyboardButton("✨ Edit Custom Emoji ID", callback_data=f"admui:setemoji:{button_key}"))
     kb.add(InlineKeyboardButton("🗑️ Remove Emoji", callback_data=f"admui:rmemoji:{button_key}"))
