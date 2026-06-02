@@ -509,7 +509,7 @@ def update_ui_setting(button_key: str, field: str, value: str):
     
     # Save back to settings_col
     settings_col.update_one(
-        {"setting_key": "ui_buttons"},
-        {"$set": {"value": ui_settings}},
+        {"key": "ui_buttons"},
+        {"$set": {"key": "ui_buttons", "value": ui_settings}},
         upsert=True
     )
