@@ -147,6 +147,11 @@ def register(bot: telebot.TeleBot):
             _handle_gift_send_private(bot, message, state, text)
             return
 
+        # ── ADMIN: Search ────────────────────────────────────────────
+        if action == "admin_search" and is_admin(user_id):
+            _handle_admin_search(bot, message, state, text)
+            return
+
     # ── Document handler for CSV stock uploads ───────────────────────
     @bot.message_handler(
         content_types=["document"],
@@ -766,7 +771,6 @@ def _handle_admin_credits(
         logger.info("Admin %s credits: user=%s amount=%s", operation, target_id, amount)
         
         if operation == "add":
-            from database import get_user
             u = get_user(target_id)
             if u:
                 from utils.helpers import announce_event
@@ -1141,3 +1145,75 @@ def _handle_gift_send_private(
             parse_mode="HTML",
             reply_markup=admin_back_kb(),
         )
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  ADMIN: Search                                                       ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def _handle_admin_search(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    state: dict,
+    text: str,
+):
+    from database import search_database
+    from keyboards.inline import admin_back_kb
+    from utils.helpers import format_datetime
+    
+    user_id = message.from_user.id
+    query = text.strip()
+    result = search_database(query)
+    
+    if result["type"] == "none":
+        bot.send_message(
+            user_id, 
+            f"❌ No matching Link or Gift Code found for: <code>{query}</code>",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb()
+        )
+    elif result["type"] == "stock":
+        item = result["data"]
+        from database import get_product
+        product = get_product(str(item["product_id"]))
+        prod_name = product["name"] if product else "Unknown Product"
+        
+        status = "🔴 SOLD" if item["is_sold"] else "🟢 AVAILABLE"
+        
+        msg = (
+            f"🔍 <b>Search Result (Stock Link)</b>\n\n"
+            f"🔗 <b>Link:</b> <code>{item['content']}</code>\n"
+            f"📦 <b>Product:</b> {prod_name}\n"
+            f"📊 <b>Status:</b> {status}\n\n"
+            f"📅 <b>Added At:</b> {format_datetime(item['added_at'])}\n"
+        )
+        if item.get("expires_at"):
+            msg += f"⏳ <b>Expires At:</b> {format_datetime(item['expires_at'])}\n"
+            
+        if item["is_sold"]:
+            msg += (
+                f"\n👤 <b>Sold To (User ID):</b> <code>{item['sold_to']}</code>\n"
+                f"🕒 <b>Sold At:</b> {format_datetime(item['sold_at'])}\n"
+            )
+            
+        bot.send_message(user_id, msg, parse_mode="HTML", reply_markup=admin_back_kb())
+        
+    elif result["type"] == "gift_code":
+        item = result["data"]
+        
+        msg = (
+            f"🔍 <b>Search Result (Gift Code)</b>\n\n"
+            f"🎟 <b>Code:</b> <code>{item['code']}</code>\n"
+            f"🏆 <b>Points:</b> {item['points']}\n"
+            f"👥 <b>Uses:</b> {item.get('current_uses', 0)} / {item['max_uses']}\n\n"
+            f"👤 <b>Created By (User ID):</b> <code>{item['created_by']}</code>\n"
+            f"📅 <b>Created At:</b> {format_datetime(item['created_at'])}\n"
+        )
+        if item.get("expires_at"):
+            msg += f"⏳ <b>Expires At:</b> {format_datetime(item['expires_at'])}\n"
+            
+        if item.get("redeemed_by"):
+            msg += f"\n👥 <b>Redeemed By:</b> {len(item['redeemed_by'])} users"
+            
+        bot.send_message(user_id, msg, parse_mode="HTML", reply_markup=admin_back_kb())
+
+    user_states.clear(user_id)

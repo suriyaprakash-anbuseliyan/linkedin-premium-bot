@@ -71,6 +71,27 @@ def register(bot: telebot.TeleBot):
         bot.answer_callback_query(call.id)
 
     # ╔══════════════════════════════════════════════════════════════════╗
+    # ║  SEARCH LINK OR CODE                                             ║
+    # ╚══════════════════════════════════════════════════════════════════╝
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:search")
+    def cb_admin_search(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔", show_alert=True)
+            return
+        user_states.set(call.from_user.id, {
+            "action": "admin_search",
+        })
+        bot.edit_message_text(
+            "🔍 <b>Search Database</b>\n\n"
+            "Please paste the <b>LinkedIn Link</b> or <b>Gift Code</b> you want to search:",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=admin_back_kb(),
+        )
+        bot.answer_callback_query(call.id)
+
+    # ╔══════════════════════════════════════════════════════════════════╗
     # ║  ADD PRODUCT (multi-step form)                                   ║
     # ╚══════════════════════════════════════════════════════════════════╝
     @bot.callback_query_handler(func=lambda c: c.data == "adm:add_product")

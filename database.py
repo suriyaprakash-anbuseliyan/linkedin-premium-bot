@@ -463,3 +463,24 @@ def redeem_gift_code(code: str, user_id: int) -> bool | str:
         return True
         
     return "Failed to redeem code. Please try again."
+
+def search_database(query: str) -> dict:
+    """Search for a link in stock_col or a code in gift_codes_col."""
+    query = query.strip()
+    result = {"type": "none", "data": None}
+    
+    # 1. Search in stock
+    stock_item = stock_col.find_one({"content": {"$regex": query, "$options": "i"}})
+    if stock_item:
+        result["type"] = "stock"
+        result["data"] = stock_item
+        return result
+        
+    # 2. Search in gift codes
+    code_item = gift_codes_col.find_one({"code": query})
+    if code_item:
+        result["type"] = "gift_code"
+        result["data"] = code_item
+        return result
+        
+    return result

@@ -175,6 +175,9 @@ def admin_panel_kb(is_maintenance: bool = False) -> InlineKeyboardMarkup:
         InlineKeyboardButton("⚙️ Payment Settings", callback_data="adm:payment_settings"),
         InlineKeyboardButton("📊 Statistics", callback_data="adm:stats"),
     )
+    kb.add(
+        InlineKeyboardButton("🔍 Search Link/Code", callback_data="adm:search"),
+    )
     
     maint_label = "🟢 Maintenance: ON" if is_maintenance else "🔴 Maintenance: OFF"
     kb.add(
