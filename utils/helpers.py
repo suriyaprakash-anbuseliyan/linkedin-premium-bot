@@ -187,23 +187,36 @@ def clear_ui_cache():
     global _ui_cache
     _ui_cache = None
 
-def btn_config(key: str, default_text: str, default_style: str = None) -> dict:
+def btn_config(key: str, default_text: str, default_emoji: str = "", default_style: str = None) -> dict:
     """
     Returns a kwargs dictionary to unpack into InlineKeyboardButton.
-    E.g. **btn_config("menu_buy", "🛒 BUY", "success")
+    E.g. **btn_config("menu_buy", "BUY", "🛒", "success")
     """
     ui = get_ui_buttons()
     cfg = ui.get(key, {})
     
+    emoji_id = cfg.get("emoji_id")
+    
+    # If admin set custom text, use it exactly as provided.
+    if "text" in cfg:
+        final_text = cfg["text"]
+    else:
+        # If they use a custom emoji, drop the default emoji so they don't double up.
+        if emoji_id and default_emoji:
+            final_text = default_text
+        elif default_emoji:
+            final_text = f"{default_emoji} {default_text}"
+        else:
+            final_text = default_text
+            
     btn_kwargs = {
-        "text": cfg.get("text", default_text)
+        "text": final_text
     }
     
     style = cfg.get("style", default_style)
     if style and style != "none":
         btn_kwargs["style"] = style
         
-    emoji_id = cfg.get("emoji_id")
     if emoji_id:
         btn_kwargs["icon_custom_emoji_id"] = emoji_id
         
