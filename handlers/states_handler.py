@@ -1103,7 +1103,10 @@ def _handle_gift_send_private(
     expiry_str = "Never"
     if code_doc.get("expires_at"):
         from datetime import datetime, timezone
-        diff = code_doc["expires_at"] - datetime.now(timezone.utc)
+        exp = code_doc["expires_at"]
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        diff = exp - datetime.now(timezone.utc)
         if diff.total_seconds() > 0:
             mins = int(diff.total_seconds() / 60)
             if mins >= 60:
