@@ -814,114 +814,114 @@ def register(bot: telebot.TeleBot):
         )
         bot.answer_callback_query(call.id)
 
-# ╔══════════════════════════════════════════════════════════════════════╗
-# ║  UI SETTINGS                                                         ║
-# ╚══════════════════════════════════════════════════════════════════════╝
-
-@bot.callback_query_handler(func=lambda c: c.data == "adm:ui_settings")
-def cb_ui_settings(call: telebot.types.CallbackQuery):
-    if not _admin_only(call):
-        return
+    # ╔══════════════════════════════════════════════════════════════════════╗
+    # ║  UI SETTINGS                                                         ║
+    # ╚══════════════════════════════════════════════════════════════════════╝
     
-    from keyboards.inline import admin_ui_button_list_kb
-    bot.edit_message_text(
-        "🎨 <b>UI Settings</b>\n\n"
-        "Select a button to customize its text, color style, or premium emoji:",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        parse_mode="HTML",
-        reply_markup=admin_ui_button_list_kb(),
-    )
-    bot.answer_callback_query(call.id)
-
-@bot.callback_query_handler(func=lambda c: c.data.startswith("admui:"))
-def cb_admui_actions(call: telebot.types.CallbackQuery):
-    if not _admin_only(call):
-        return
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:ui_settings")
+    def cb_ui_settings(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
         
-    parts = call.data.split(":")
-    action = parts[1]
-    button_key = parts[2]
-    
-    from keyboards.inline import admin_ui_edit_kb, admin_ui_style_kb, admin_back_kb
-    from utils.helpers import get_ui_buttons, clear_ui_cache
-    from database import update_ui_setting
-    from handlers.states_handler import user_states
-    
-    ui = get_ui_buttons()
-    cfg = ui.get(button_key, {})
-    
-    if action == "edit":
-        text = cfg.get('text', '<i>(Default)</i>')
-        style = cfg.get('style', '<i>(Default)</i>')
-        emoji = cfg.get('emoji_id', '<i>None</i>')
-        
+        from keyboards.inline import admin_ui_button_list_kb
         bot.edit_message_text(
-            f"🎨 <b>Editing Button:</b> <code>{button_key}</code>\n\n"
-            f"<b>Current Text:</b> {text}\n"
-            f"<b>Current Style:</b> {style}\n"
-            f"<b>Custom Emoji ID:</b> <code>{emoji}</code>\n\n"
-            "Choose what to edit:",
+            "🎨 <b>UI Settings</b>\n\n"
+            "Select a button to customize its text, color style, or premium emoji:",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=admin_ui_edit_kb(button_key),
+            reply_markup=admin_ui_button_list_kb(),
         )
+        bot.answer_callback_query(call.id)
+    
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admui:"))
+    def cb_admui_actions(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+            
+        parts = call.data.split(":")
+        action = parts[1]
+        button_key = parts[2]
         
-    elif action == "style":
-        bot.edit_message_text(
-            f"🎨 <b>Select Style for:</b> <code>{button_key}</code>\n\n"
-            "Primary = Blue\nSuccess = Green\nDanger = Red\nNone = Default",
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            parse_mode="HTML",
-            reply_markup=admin_ui_style_kb(button_key),
-        )
+        from keyboards.inline import admin_ui_edit_kb, admin_ui_style_kb, admin_back_kb
+        from utils.helpers import get_ui_buttons, clear_ui_cache
+        from database import update_ui_setting
+        from handlers.states_handler import user_states
         
-    elif action == "setstyle":
-        style_val = parts[3]
-        update_ui_setting(button_key, "style", style_val)
-        clear_ui_cache()
-        bot.answer_callback_query(call.id, f"Style set to {style_val}", show_alert=True)
-        # Re-render edit menu
-        call.data = f"admui:edit:{button_key}"
-        cb_admui_actions(call)
-        return
+        ui = get_ui_buttons()
+        cfg = ui.get(button_key, {})
         
-    elif action == "rmemoji":
-        update_ui_setting(button_key, "emoji_id", None)
-        clear_ui_cache()
-        bot.answer_callback_query(call.id, "Custom emoji removed", show_alert=True)
-        # Re-render edit menu
-        call.data = f"admui:edit:{button_key}"
-        cb_admui_actions(call)
-        return
-        
-    elif action == "settext":
-        user_states.set(call.from_user.id, {
-            "action": "admin_ui_set_text",
-            "button_key": button_key,
-        })
-        bot.send_message(
-            call.message.chat.id,
-            f"✏️ <b>Enter new text for button:</b> <code>{button_key}</code>",
-            parse_mode="HTML",
-            reply_markup=admin_back_kb()
-        )
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-        
-    elif action == "setemoji":
-        user_states.set(call.from_user.id, {
-            "action": "admin_ui_set_emoji",
-            "button_key": button_key,
-        })
-        bot.send_message(
-            call.message.chat.id,
-            f"✨ <b>Enter Premium Emoji ID for button:</b> <code>{button_key}</code>\n\n"
-            "<i>(Must be a valid numerical ID for a premium animated emoji)</i>",
-            parse_mode="HTML",
-            reply_markup=admin_back_kb()
-        )
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-        
-    bot.answer_callback_query(call.id)
+        if action == "edit":
+            text = cfg.get('text', '<i>(Default)</i>')
+            style = cfg.get('style', '<i>(Default)</i>')
+            emoji = cfg.get('emoji_id', '<i>None</i>')
+            
+            bot.edit_message_text(
+                f"🎨 <b>Editing Button:</b> <code>{button_key}</code>\n\n"
+                f"<b>Current Text:</b> {text}\n"
+                f"<b>Current Style:</b> {style}\n"
+                f"<b>Custom Emoji ID:</b> <code>{emoji}</code>\n\n"
+                "Choose what to edit:",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=admin_ui_edit_kb(button_key),
+            )
+            
+        elif action == "style":
+            bot.edit_message_text(
+                f"🎨 <b>Select Style for:</b> <code>{button_key}</code>\n\n"
+                "Primary = Blue\nSuccess = Green\nDanger = Red\nNone = Default",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=admin_ui_style_kb(button_key),
+            )
+            
+        elif action == "setstyle":
+            style_val = parts[3]
+            update_ui_setting(button_key, "style", style_val)
+            clear_ui_cache()
+            bot.answer_callback_query(call.id, f"Style set to {style_val}", show_alert=True)
+            # Re-render edit menu
+            call.data = f"admui:edit:{button_key}"
+            cb_admui_actions(call)
+            return
+            
+        elif action == "rmemoji":
+            update_ui_setting(button_key, "emoji_id", None)
+            clear_ui_cache()
+            bot.answer_callback_query(call.id, "Custom emoji removed", show_alert=True)
+            # Re-render edit menu
+            call.data = f"admui:edit:{button_key}"
+            cb_admui_actions(call)
+            return
+            
+        elif action == "settext":
+            user_states.set(call.from_user.id, {
+                "action": "admin_ui_set_text",
+                "button_key": button_key,
+            })
+            bot.send_message(
+                call.message.chat.id,
+                f"✏️ <b>Enter new text for button:</b> <code>{button_key}</code>",
+                parse_mode="HTML",
+                reply_markup=admin_back_kb()
+            )
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+            
+        elif action == "setemoji":
+            user_states.set(call.from_user.id, {
+                "action": "admin_ui_set_emoji",
+                "button_key": button_key,
+            })
+            bot.send_message(
+                call.message.chat.id,
+                f"✨ <b>Enter Premium Emoji ID for button:</b> <code>{button_key}</code>\n\n"
+                "<i>(Must be a valid numerical ID for a premium animated emoji)</i>",
+                parse_mode="HTML",
+                reply_markup=admin_back_kb()
+            )
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+            
+        bot.answer_callback_query(call.id)
