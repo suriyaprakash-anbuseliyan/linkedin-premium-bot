@@ -23,7 +23,7 @@ def main():
     # ── Gracefully handle stale callback errors ──────────────────────
     class SilentExceptionHandler(telebot.ExceptionHandler):
         def handle(self, exception):
-            logger.debug("Suppressed polling exception: %s", exception)
+            logger.error("Suppressed polling exception: %s", exception, exc_info=True)
             return True  # True = handled, don't crash
 
     bot.exception_handler = SilentExceptionHandler()
