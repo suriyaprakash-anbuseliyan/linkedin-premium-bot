@@ -625,6 +625,22 @@ def register(bot: telebot.TeleBot):
                 parse_mode="HTML",
                 reply_markup=admin_back_kb(),
             )
+            
+        elif action == "msg":
+            user_states.set(call.from_user.id, {
+                "action": "admin_send_msg",
+                "target_id": target_id,
+            })
+            bot.edit_message_text(
+                f"✉️ <b>Send Message to User</b>\n\n"
+                f"Enter the message you want to send to user <code>{target_id}</code>.\n\n"
+                f"<i>Note: It will be prefixed with 'Message from owner'</i>",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=admin_back_kb(),
+            )
+            bot.answer_callback_query(call.id)
     # ╔══════════════════════════════════════════════════════════════════╗
     # ║  ADD / REMOVE CREDITS                                            ║
     # ╚══════════════════════════════════════════════════════════════════╝

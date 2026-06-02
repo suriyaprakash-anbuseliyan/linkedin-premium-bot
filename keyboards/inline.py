@@ -208,7 +208,10 @@ def admin_user_actions_kb(user_id: int, is_banned: bool) -> InlineKeyboardMarkup
     else:
         kb.add(InlineKeyboardButton("🚫 Ban (Mute) User", callback_data=f"admuser:ban:{user_id}"))
         
-    kb.add(InlineKeyboardButton("🗑️ Delete User", callback_data=f"admuser:delete:{user_id}"))
+    kb.add(
+        InlineKeyboardButton("✉️ Send Message", callback_data=f"admuser:msg:{user_id}"),
+        InlineKeyboardButton("🗑️ Delete User", callback_data=f"admuser:delete:{user_id}")
+    )
     kb.add(InlineKeyboardButton("🔙 Back to Search", callback_data="adm:users"))
     return kb
 

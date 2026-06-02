@@ -152,6 +152,11 @@ def register(bot: telebot.TeleBot):
             _handle_admin_search(bot, message, state, text)
             return
 
+        # ── ADMIN: Send Direct Message ───────────────────────────────
+        if action == "admin_send_msg" and is_admin(user_id):
+            _handle_admin_send_msg(bot, message, state, text)
+            return
+
     # ── Document handler for CSV stock uploads ───────────────────────
     @bot.message_handler(
         content_types=["document"],
@@ -1217,3 +1222,38 @@ def _handle_admin_search(
         bot.send_message(user_id, msg, parse_mode="HTML", reply_markup=admin_back_kb())
 
     user_states.clear(user_id)
+
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  ADMIN: Send Direct Message                                          ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def _handle_admin_send_msg(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    state: dict,
+    text: str,
+):
+    from keyboards.inline import admin_back_kb
+    
+    user_id = message.from_user.id
+    target_id = state["target_id"]
+    user_states.clear(user_id)
+    
+    msg_text = f"📨 <b>Message from owner:</b>\n\n{text}"
+    
+    try:
+        bot.send_message(target_id, msg_text, parse_mode="HTML")
+        bot.send_message(
+            user_id,
+            f"✅ Message sent to user <code>{target_id}</code>.",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb()
+        )
+    except Exception as exc:
+        bot.send_message(
+            user_id,
+            f"❌ Failed to send message to user <code>{target_id}</code>.\nError: {exc}",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb()
+        )
