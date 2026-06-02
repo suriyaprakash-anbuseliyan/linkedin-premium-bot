@@ -168,3 +168,43 @@ def get_credit_packages() -> dict[int, dict]:
 
         packages[qty] = {"inr": inr, "usdt": usdt}
     return packages
+
+
+# ── UI CACHE & HELPERS ────────────────────────────────────────────────────────
+
+_ui_cache = None
+
+def get_ui_buttons() -> dict:
+    """Fetch UI settings from the database and cache them."""
+    global _ui_cache
+    if _ui_cache is None:
+        from database import get_setting
+        _ui_cache = get_setting("ui_buttons", {})
+    return _ui_cache
+
+def clear_ui_cache():
+    """Clear the UI cache so it fetches fresh data from DB on next request."""
+    global _ui_cache
+    _ui_cache = None
+
+def btn_config(key: str, default_text: str, default_style: str = None) -> dict:
+    """
+    Returns a kwargs dictionary to unpack into InlineKeyboardButton.
+    E.g. **btn_config("menu_buy", "🛒 BUY", "success")
+    """
+    ui = get_ui_buttons()
+    cfg = ui.get(key, {})
+    
+    btn_kwargs = {
+        "text": cfg.get("text", default_text)
+    }
+    
+    style = cfg.get("style", default_style)
+    if style and style != "none":
+        btn_kwargs["style"] = style
+        
+    emoji_id = cfg.get("emoji_id")
+    if emoji_id:
+        btn_kwargs["icon_custom_emoji_id"] = emoji_id
+        
+    return btn_kwargs

@@ -8,7 +8,7 @@ Callback data uses a simple prefix convention:
 
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 from config import REQUIRED_CHANNEL_LINK
-from utils.helpers import get_credit_packages
+from utils.helpers import get_credit_packages, btn_config
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
@@ -18,8 +18,8 @@ from utils.helpers import get_credit_packages
 def join_channel_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
-        InlineKeyboardButton("📢 Join Channel", url=REQUIRED_CHANNEL_LINK),
-        InlineKeyboardButton("✅ I've Joined", callback_data="check_join", style="success"),
+        InlineKeyboardButton(**btn_config("join_channel", "📢 Join Channel"), url=REQUIRED_CHANNEL_LINK),
+        InlineKeyboardButton(**btn_config("check_join", "✅ I've Joined", "success"), callback_data="check_join"),
     )
     return kb
 
@@ -30,21 +30,21 @@ def join_channel_kb() -> InlineKeyboardMarkup:
 
 def main_menu_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(InlineKeyboardButton("🛒 BUY", callback_data="menu:buy", style="success"))
+    kb.add(InlineKeyboardButton(**btn_config("menu_buy", "🛒 BUY", "success"), callback_data="menu:buy"))
     kb.add(
-        InlineKeyboardButton("💰 Add Credits", callback_data="menu:credits", style="primary"),
-        InlineKeyboardButton("💳 Balance", callback_data="menu:balance"),
+        InlineKeyboardButton(**btn_config("menu_credits", "💰 Add Credits", "primary"), callback_data="menu:credits"),
+        InlineKeyboardButton(**btn_config("menu_balance", "💳 Balance"), callback_data="menu:balance"),
     )
     kb.add(
-        InlineKeyboardButton("👤 Profile", callback_data="menu:profile"),
-        InlineKeyboardButton("🎁 Refer/Earn", callback_data="menu:referral", style="success"),
+        InlineKeyboardButton(**btn_config("menu_profile", "👤 Profile"), callback_data="menu:profile"),
+        InlineKeyboardButton(**btn_config("menu_referral", "🎁 Refer/Earn", "success"), callback_data="menu:referral"),
     )
     kb.add(
-        InlineKeyboardButton("📜 Orders", callback_data="menu:orders"),
-        InlineKeyboardButton("🎟 Redeem Gift Code", callback_data="menu:giftcode"),
+        InlineKeyboardButton(**btn_config("menu_orders", "📜 Orders"), callback_data="menu:orders"),
+        InlineKeyboardButton(**btn_config("menu_giftcode", "🎟 Redeem Gift Code"), callback_data="menu:giftcode"),
     )
     kb.add(
-        InlineKeyboardButton("📞 Support", callback_data="menu:support"),
+        InlineKeyboardButton(**btn_config("menu_support", "📞 Support"), callback_data="menu:support"),
     )
     return kb
 
@@ -83,8 +83,8 @@ def products_list_kb(products: list[dict]) -> InlineKeyboardMarkup:
 def product_detail_kb(product_id: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
-        InlineKeyboardButton("🛒 Purchase", callback_data=f"prod:buy:{product_id}", style="success"),
-        InlineKeyboardButton("🔙 Back to Products", callback_data="menu:buy"),
+        InlineKeyboardButton(**btn_config("prod_buy", "🛒 Purchase", "success"), callback_data=f"prod:buy:{product_id}"),
+        InlineKeyboardButton(**btn_config("prod_back", "🔙 Back to Products"), callback_data="menu:buy"),
     )
     return kb
 
@@ -92,8 +92,8 @@ def product_detail_kb(product_id: str) -> InlineKeyboardMarkup:
 def confirm_purchase_kb(product_id: str, qty: int = 1) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton("✅ Confirm", callback_data=f"prod:confirm:{product_id}:{qty}", style="success"),
-        InlineKeyboardButton("❌ Cancel", callback_data="menu:buy", style="danger"),
+        InlineKeyboardButton(**btn_config("prod_confirm", "✅ Confirm", "success"), callback_data=f"prod:confirm:{product_id}:{qty}"),
+        InlineKeyboardButton(**btn_config("prod_cancel", "❌ Cancel", "danger"), callback_data="menu:buy"),
     )
     return kb
 
@@ -177,6 +177,7 @@ def admin_panel_kb(is_maintenance: bool = False) -> InlineKeyboardMarkup:
     )
     kb.add(
         InlineKeyboardButton("🔍 Search Link/Code", callback_data="adm:search"),
+        InlineKeyboardButton("🎨 UI Settings", callback_data="adm:ui_settings"),
     )
     
     maint_label = "🟢 Maintenance: ON" if is_maintenance else "🔴 Maintenance: OFF"
@@ -213,6 +214,55 @@ def admin_user_actions_kb(user_id: int, is_banned: bool) -> InlineKeyboardMarkup
         InlineKeyboardButton("🗑️ Delete User", callback_data=f"admuser:delete:{user_id}")
     )
     kb.add(InlineKeyboardButton("🔙 Back to Search", callback_data="adm:users"))
+    return kb
+
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  ADMIN UI SETTINGS                                                   ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def admin_ui_button_list_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    buttons_to_edit = [
+        ("menu_buy", "Main Menu: BUY"),
+        ("menu_credits", "Main Menu: Add Credits"),
+        ("menu_balance", "Main Menu: Balance"),
+        ("menu_profile", "Main Menu: Profile"),
+        ("menu_referral", "Main Menu: Refer/Earn"),
+        ("menu_orders", "Main Menu: Orders"),
+        ("menu_giftcode", "Main Menu: Gift Code"),
+        ("menu_support", "Main Menu: Support"),
+        ("join_channel", "Join Channel: Link"),
+        ("check_join", "Join Channel: I've Joined"),
+        ("prod_buy", "Product: Purchase"),
+        ("prod_confirm", "Product: Confirm"),
+        ("prod_cancel", "Product: Cancel"),
+    ]
+    for key, label in buttons_to_edit:
+        kb.add(InlineKeyboardButton(f"🎨 {label}", callback_data=f"admui:edit:{key}"))
+    kb.add(InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"))
+    return kb
+
+
+def admin_ui_edit_kb(button_key: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("✏️ Edit Text", callback_data=f"admui:settext:{button_key}"))
+    kb.add(InlineKeyboardButton("🎨 Edit Color Style", callback_data=f"admui:style:{button_key}"))
+    kb.add(InlineKeyboardButton("✨ Edit Custom Emoji ID", callback_data=f"admui:setemoji:{button_key}"))
+    kb.add(InlineKeyboardButton("🗑️ Remove Emoji", callback_data=f"admui:rmemoji:{button_key}"))
+    kb.add(InlineKeyboardButton("🔙 Back to UI List", callback_data="adm:ui_settings"))
+    return kb
+
+
+def admin_ui_style_kb(button_key: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("🟦 Primary (Blue)", callback_data=f"admui:setstyle:{button_key}:primary"),
+        InlineKeyboardButton("🟩 Success (Green)", callback_data=f"admui:setstyle:{button_key}:success"),
+        InlineKeyboardButton("🟥 Danger (Red)", callback_data=f"admui:setstyle:{button_key}:danger"),
+        InlineKeyboardButton("⬛ Default (Clear)", callback_data=f"admui:setstyle:{button_key}:none"),
+    )
+    kb.add(InlineKeyboardButton("🔙 Back", callback_data=f"admui:edit:{button_key}"))
     return kb
 
 

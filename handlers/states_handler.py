@@ -157,6 +157,11 @@ def register(bot: telebot.TeleBot):
             _handle_admin_send_msg(bot, message, state, text)
             return
 
+        # ── ADMIN: UI Settings (Text / Emoji) ────────────────────────
+        if action in ("admin_ui_set_text", "admin_ui_set_emoji") and is_admin(user_id):
+            _handle_admin_ui_input(bot, message, state, text)
+            return
+
     # ── Document handler for CSV stock uploads ───────────────────────
     @bot.message_handler(
         content_types=["document"],
@@ -1257,3 +1262,38 @@ def _handle_admin_send_msg(
             parse_mode="HTML",
             reply_markup=admin_back_kb()
         )
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  ADMIN: UI Settings Input                                            ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def _handle_admin_ui_input(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    state: dict,
+    text: str,
+):
+    from database import update_ui_setting
+    from utils.helpers import clear_ui_cache
+    from keyboards.inline import admin_ui_edit_kb
+    
+    user_id = message.from_user.id
+    button_key = state["button_key"]
+    action = state["action"]
+    user_states.clear(user_id)
+    
+    if action == "admin_ui_set_text":
+        update_ui_setting(button_key, "text", text)
+        msg_text = f"✅ Text for <code>{button_key}</code> updated to: {text}"
+    else:
+        update_ui_setting(button_key, "emoji_id", text)
+        msg_text = f"✅ Custom Emoji for <code>{button_key}</code> updated to ID: <code>{text}</code>"
+        
+    clear_ui_cache()
+    
+    bot.send_message(
+        user_id,
+        msg_text,
+        parse_mode="HTML",
+        reply_markup=admin_ui_edit_kb(button_key)
+    )

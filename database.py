@@ -496,3 +496,20 @@ def search_database(query: str) -> dict:
         return result
         
     return result
+
+def update_ui_setting(button_key: str, field: str, value: str):
+    """
+    Update a specific field (text, style, emoji_id) for a button in the ui_buttons setting.
+    """
+    ui_settings = get_setting("ui_buttons", {})
+    if button_key not in ui_settings:
+        ui_settings[button_key] = {}
+    
+    ui_settings[button_key][field] = value
+    
+    # Save back to settings_col
+    settings_col.update_one(
+        {"setting_key": "ui_buttons"},
+        {"$set": {"value": ui_settings}},
+        upsert=True
+    )
