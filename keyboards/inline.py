@@ -19,7 +19,7 @@ def join_channel_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton("📢 Join Channel", url=REQUIRED_CHANNEL_LINK),
-        InlineKeyboardButton("✅ I've Joined", callback_data="check_join"),
+        InlineKeyboardButton("✅ I've Joined", callback_data="check_join", style="success"),
     )
     return kb
 
@@ -30,14 +30,14 @@ def join_channel_kb() -> InlineKeyboardMarkup:
 
 def main_menu_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(InlineKeyboardButton("🛒 BUY", callback_data="menu:buy"))
+    kb.add(InlineKeyboardButton("🛒 BUY", callback_data="menu:buy", style="success"))
     kb.add(
-        InlineKeyboardButton("💰 Add Credits", callback_data="menu:credits"),
+        InlineKeyboardButton("💰 Add Credits", callback_data="menu:credits", style="primary"),
         InlineKeyboardButton("💳 Balance", callback_data="menu:balance"),
     )
     kb.add(
         InlineKeyboardButton("👤 Profile", callback_data="menu:profile"),
-        InlineKeyboardButton("🎁 Refer/Earn", callback_data="menu:referral"),
+        InlineKeyboardButton("🎁 Refer/Earn", callback_data="menu:referral", style="success"),
     )
     kb.add(
         InlineKeyboardButton("📜 Orders", callback_data="menu:orders"),
@@ -83,7 +83,7 @@ def products_list_kb(products: list[dict]) -> InlineKeyboardMarkup:
 def product_detail_kb(product_id: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
-        InlineKeyboardButton("🛒 Purchase", callback_data=f"prod:buy:{product_id}"),
+        InlineKeyboardButton("🛒 Purchase", callback_data=f"prod:buy:{product_id}", style="success"),
         InlineKeyboardButton("🔙 Back to Products", callback_data="menu:buy"),
     )
     return kb
@@ -92,8 +92,8 @@ def product_detail_kb(product_id: str) -> InlineKeyboardMarkup:
 def confirm_purchase_kb(product_id: str, qty: int = 1) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton("✅ Confirm", callback_data=f"prod:confirm:{product_id}:{qty}"),
-        InlineKeyboardButton("❌ Cancel", callback_data="menu:buy"),
+        InlineKeyboardButton("✅ Confirm", callback_data=f"prod:confirm:{product_id}:{qty}", style="success"),
+        InlineKeyboardButton("❌ Cancel", callback_data="menu:buy", style="danger"),
     )
     return kb
 
