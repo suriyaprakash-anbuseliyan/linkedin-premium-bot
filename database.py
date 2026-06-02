@@ -329,11 +329,12 @@ def total_credits_sold() -> int:
 # ║  ORDER helpers                                                      ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def create_order(user_id: int, product_name: str, credits_used: int) -> str:
+def create_order(user_id: int, product_name: str, credits_used: int, items: list[str] = None) -> str:
     doc = {
         "user_id": user_id,
         "product_name": product_name,
         "credits_used": credits_used,
+        "items": items or [],
         "created_at": datetime.now(timezone.utc),
     }
     result = orders_col.insert_one(doc)

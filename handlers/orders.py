@@ -46,10 +46,12 @@ def register(bot: telebot.TeleBot):
 
         lines = ["📜 <b>Your Orders</b>\n"]
         for i, order in enumerate(orders[:20], 1):  # show last 20
+            items = order.get("items", [])
+            items_str = "".join([f"\n   🔗 <code>{item}</code>" for item in items])
             lines.append(
                 f"{i}. <b>{order['product_name']}</b>\n"
                 f"   💎 Credits: {order['credits_used']}  •  "
-                f"📅 {format_datetime(order.get('created_at'))}"
+                f"📅 {format_datetime(order.get('created_at'))}{items_str}\n"
             )
         text = "\n".join(lines)
 

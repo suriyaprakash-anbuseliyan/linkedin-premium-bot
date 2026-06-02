@@ -186,7 +186,8 @@ def register(bot: telebot.TeleBot):
         # Deduct credits
         remove_credits(call.from_user.id, actual_cost)
         # Create order
-        create_order(call.from_user.id, product["name"], actual_cost)
+        items_list = [item["content"] for item in claimed_items]
+        create_order(call.from_user.id, product["name"], actual_cost, items_list)
         logger.info(
             "Purchase: user=%s product=%s credits=%s qty=%s",
             call.from_user.id, product["name"], actual_cost, actual_qty,
