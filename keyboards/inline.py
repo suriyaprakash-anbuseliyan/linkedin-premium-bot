@@ -78,6 +78,12 @@ def products_list_kb(products: list[dict]) -> InlineKeyboardMarkup:
         btn_kwargs['text'] = f"{btn_kwargs['text']} ({stock})  —  {p['credit_cost']} credit(s)"
         btn_kwargs['callback_data'] = f"prod:view:{p['_id']}"
         
+        # Override style based on stock availability
+        if stock > 0:
+            btn_kwargs['style'] = 'success'
+        else:
+            btn_kwargs['style'] = 'danger'
+        
         kb.add(InlineKeyboardButton(**btn_kwargs))
     kb.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="menu:main"))
     return kb
