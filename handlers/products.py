@@ -191,7 +191,6 @@ def register(bot: telebot.TeleBot):
             "Purchase: user=%s product=%s credits=%s qty=%s",
             call.from_user.id, product["name"], actual_cost, actual_qty,
         )
-        from database import get_user
         u = get_user(call.from_user.id)
         if u:
             from utils.helpers import announce_event
