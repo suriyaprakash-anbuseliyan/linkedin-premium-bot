@@ -29,6 +29,32 @@ from utils.helpers import is_admin, format_datetime
 from utils.states import user_states
 import csv
 import io
+import threading
+import time
+
+def _run_broadcast_new_stock(bot: telebot.TeleBot, product_name: str, added_count: int, product_id: str):
+    from database import get_all_user_ids, get_available_stock_count
+    
+    total_stock = get_available_stock_count(product_id)
+    msg_text = (
+        f"📢 <b>New Stock Added!</b>\n\n"
+        f"📦 Product: <b>{product_name}</b>\n"
+        f"✅ New Links Added: <b>{added_count}</b>\n"
+        f"📊 Total Available: <b>{total_stock}</b>\n\n"
+        "Head to the <b>🛒 BUY</b> menu to get yours now!"
+    )
+    
+    all_ids = get_all_user_ids()
+    for uid in all_ids:
+        try:
+            bot.send_message(uid, msg_text, parse_mode="HTML")
+        except Exception:
+            pass
+        time.sleep(0.05)
+
+def broadcast_new_stock(bot: telebot.TeleBot, product_name: str, added_count: int, product_id: str):
+    if added_count > 0:
+        threading.Thread(target=_run_broadcast_new_stock, args=(bot, product_name, added_count, product_id), daemon=True).start()
 
 
 def register(bot: telebot.TeleBot):
@@ -198,6 +224,8 @@ def register(bot: telebot.TeleBot):
         added, duplicates = 0, 0
         if valid_links:
             added, duplicates = add_stock_items(product_id, valid_links)
+            
+        broadcast_new_stock(bot, product_name, added, product_id)
 
         user_states.clear(user_id)
         logger.info(
@@ -501,6 +529,8 @@ def _handle_add_stock(
     added, duplicates = 0, 0
     if valid_links:
         added, duplicates = add_stock_items(product_id, valid_links)
+        
+    broadcast_new_stock(bot, product_name, added, product_id)
 
     user_states.clear(user_id)
     logger.info(
@@ -575,6 +605,8 @@ def _handle_add_stock_multi(
         added, duplicates = 0, 0
         if valid_links:
             added, duplicates = add_stock_items(product_id, valid_links)
+            
+        broadcast_new_stock(bot, product_name, added, product_id)
 
         user_states.clear(user_id)
         logger.info(

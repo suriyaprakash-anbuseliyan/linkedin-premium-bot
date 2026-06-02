@@ -69,9 +69,11 @@ def referral_menu_kb(can_convert: bool) -> InlineKeyboardMarkup:
 def products_list_kb(products: list[dict]) -> InlineKeyboardMarkup:
     """Generate a list of product buttons for the user."""
     kb = InlineKeyboardMarkup(row_width=1)
+    from database import get_available_stock_count
     for p in products:
+        stock = get_available_stock_count(str(p['_id']))
         kb.add(InlineKeyboardButton(
-            f"{p['name']}  —  {p['credit_cost']} credit(s)",
+            f"{p['name']} ({stock})  —  {p['credit_cost']} credit(s)",
             callback_data=f"prod:view:{p['_id']}",
         ))
     kb.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="menu:main"))
