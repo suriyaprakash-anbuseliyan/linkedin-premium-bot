@@ -225,6 +225,17 @@ def admin_back_kb() -> InlineKeyboardMarkup:
     return kb
 
 
+def gift_code_actions_kb(code: str) -> InlineKeyboardMarkup:
+    """Keyboard shown after generating a gift code with send options."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("📢 Send to All Users", callback_data=f"admgift:broadcast:{code}"),
+        InlineKeyboardButton("📨 Send Privately", callback_data=f"admgift:private:{code}"),
+        InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"),
+    )
+    return kb
+
+
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║  ADMIN – product management                                        ║
 # ╚══════════════════════════════════════════════════════════════════════╝

@@ -109,6 +109,11 @@ def register(bot: telebot.TeleBot):
             _handle_admin_edit_product(bot, message, state, text)
             return
 
+        # ── ADMIN: Send Gift Code Privately ──────────────────────────
+        if action == "admin_gift_send_private" and is_admin(user_id):
+            _handle_gift_send_private(bot, message, state, text)
+            return
+
 
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║  PAYMENT submission                                                 ║
@@ -549,7 +554,7 @@ def _handle_redeem_gift_code(bot: telebot.TeleBot, message: telebot.types.Messag
     if result is True:
         bot.send_message(
             user_id,
-            "🎉 <b>Success!</b>\n\nYour gift code has been redeemed and credits have been added to your account.",
+            "🎉 <b>Success!</b>\n\nYour gift code has been redeemed and points have been added to your account.",
             parse_mode="HTML",
             reply_markup=back_to_menu_kb()
         )
@@ -571,14 +576,14 @@ def _handle_redeem_gift_code(bot: telebot.TeleBot, message: telebot.types.Messag
 
 def _handle_gift_gen_credits(bot: telebot.TeleBot, message: telebot.types.Message, state: dict, text: str):
     try:
-        credits_val = int(text)
-        if credits_val <= 0:
+        points_val = int(text)
+        if points_val <= 0:
             raise ValueError
     except ValueError:
         bot.send_message(message.chat.id, "❌ Please enter a valid positive number.")
         return
         
-    state["credits"] = credits_val
+    state["points"] = points_val
     state["action"] = "awaiting_gift_gen_uses"
     user_states.set(message.from_user.id, state)
     
@@ -604,33 +609,54 @@ def _handle_gift_gen_uses(bot: telebot.TeleBot, message: telebot.types.Message, 
     
     bot.send_message(
         message.chat.id,
-        "🎁 When should this code expire?\n\nEnter number of hours (e.g. 24), or 0 for no expiration:",
+        "🎁 When should this code expire?\n\n"
+        "Enter time in format: <b>HH MM</b> (hours and minutes)\n"
+        "Examples:\n"
+        "• <code>0 30</code> → 0 hrs 30 min\n"
+        "• <code>2 0</code> → 2 hrs 0 min\n"
+        "• <code>1 30</code> → 1 hr 30 min\n"
+        "• <code>0 0</code> → No expiration",
+        parse_mode="HTML",
         reply_markup=admin_back_kb()
     )
 
 
 def _handle_gift_gen_expiry(bot: telebot.TeleBot, message: telebot.types.Message, state: dict, text: str):
+    parts = text.strip().split()
     try:
-        hours = int(text)
-        if hours < 0:
+        if len(parts) == 1:
+            # Backwards compat: single number = hours only
+            hours = int(parts[0])
+            minutes = 0
+        elif len(parts) == 2:
+            hours = int(parts[0])
+            minutes = int(parts[1])
+        else:
+            raise ValueError
+        if hours < 0 or minutes < 0 or minutes > 59:
             raise ValueError
     except ValueError:
-        bot.send_message(message.chat.id, "❌ Please enter a valid positive number (or 0).")
+        bot.send_message(
+            message.chat.id,
+            "❌ Invalid format. Please enter time as <b>HH MM</b> (e.g. <code>0 30</code> or <code>2 0</code>).",
+            parse_mode="HTML",
+        )
         return
         
     import random, string
     from datetime import datetime, timedelta, timezone
     from database import create_gift_code
     
+    total_minutes = hours * 60 + minutes
     expires_at = None
-    if hours > 0:
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=hours)
+    if total_minutes > 0:
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=total_minutes)
         
     code = "GIFT-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
     
     create_gift_code(
         code=code,
-        credits_value=state["credits"],
+        points_value=state["points"],
         max_uses=state["max_uses"],
         expires_at=expires_at,
         created_by=message.from_user.id
@@ -638,18 +664,25 @@ def _handle_gift_gen_expiry(bot: telebot.TeleBot, message: telebot.types.Message
     
     user_states.clear(message.from_user.id)
     
-    expiry_str = f"In {hours} hours" if hours > 0 else "Never"
+    if total_minutes > 0:
+        expiry_str = f"{hours} hrs {minutes} min"
+    else:
+        expiry_str = "Never"
+    
+    from keyboards.inline import gift_code_actions_kb
     
     bot.send_message(
         message.chat.id,
         f"🎉 <b>Gift Code Generated!</b>\n\n"
-        f"🎟 Code: <code>{code}</code>\n"
-        f"💰 Value: {state['credits']} Credit(s)\n"
-        f"👥 Max Uses: {state['max_uses']}\n"
-        f"⏳ Expires: {expiry_str}\n\n"
-        f"Share this code with your users!",
+        f"┌─────────────────────────\n"
+        f"│ 🎟 Code: <code>{code}</code>\n"
+        f"│ (tap to copy)\n"
+        f"└─────────────────────────\n\n"
+        f"🏆 Points: <b>{state['points']}</b>\n"
+        f"👥 Max Uses: <b>{state['max_uses']}</b>\n"
+        f"⏳ Expires: <b>{expiry_str}</b>",
         parse_mode="HTML",
-        reply_markup=admin_back_kb()
+        reply_markup=gift_code_actions_kb(code)
     )
 
 
@@ -787,3 +820,58 @@ def _handle_edit_setting(
         parse_mode="HTML",
         reply_markup=payment_settings_kb(),
     )
+
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  ADMIN: Send Gift Code Privately                                     ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def _handle_gift_send_private(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    state: dict,
+    text: str,
+):
+    user_id = message.from_user.id
+    code = state["gift_code"]
+    user_states.clear(user_id)
+    
+    try:
+        target_id = int(text)
+    except ValueError:
+        bot.send_message(user_id, "❌ Invalid Telegram ID.", reply_markup=admin_back_kb())
+        return
+    
+    from database import get_gift_code
+    code_doc = get_gift_code(code)
+    if not code_doc:
+        bot.send_message(user_id, "❌ Gift code not found.", reply_markup=admin_back_kb())
+        return
+    
+    msg_text = (
+        "🎁 <b>Gift Code!</b>\n\n"
+        f"You received a private gift code:\n\n"
+        f"┌─────────────────────────\n"
+        f"│ 🎟 <code>{code}</code>\n"
+        f"│ (tap to copy)\n"
+        f"└─────────────────────────\n\n"
+        f"🏆 Points: <b>{code_doc['points']}</b>\n\n"
+        "Go to <b>🎟 Redeem Gift Code</b> in the menu to redeem!"
+    )
+    
+    try:
+        bot.send_message(target_id, msg_text, parse_mode="HTML")
+        bot.send_message(
+            user_id,
+            f"✅ Gift code <code>{code}</code> sent to user <code>{target_id}</code>.",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb(),
+        )
+    except Exception as exc:
+        bot.send_message(
+            user_id,
+            f"❌ Failed to send to user <code>{target_id}</code>.\n"
+            f"Error: {exc}",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb(),
+        )

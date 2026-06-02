@@ -124,7 +124,70 @@ def register(bot: telebot.TeleBot):
         user_states.set(call.from_user.id, {"action": "awaiting_gift_gen_credits"})
         bot.send_message(
             call.message.chat.id,
-            "🎁 <b>Generate Gift Code</b>\n\nHow many credits should this code give to the user?\n<i>(Enter a number, e.g., 5)</i>",
+            "🎁 <b>Generate Gift Code</b>\n\nHow many <b>points</b> should this code give to the user?\n<i>(Enter a number, e.g., 5)</i>",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb()
+        )
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admgift:broadcast:"))
+    def cb_gift_broadcast(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+        
+        code = call.data.split(":", 2)[2]
+        from database import get_gift_code
+        code_doc = get_gift_code(code)
+        if not code_doc:
+            bot.answer_callback_query(call.id, "❌ Code not found.", show_alert=True)
+            return
+        
+        all_ids = get_all_user_ids()
+        success, failed = 0, 0
+        msg_text = (
+            "🎁 <b>Gift Code!</b>\n\n"
+            f"You received a gift code:\n\n"
+            f"┌─────────────────────────\n"
+            f"│ 🎟 <code>{code}</code>\n"
+            f"│ (tap to copy)\n"
+            f"└─────────────────────────\n\n"
+            f"🏆 Points: <b>{code_doc['points']}</b>\n\n"
+            "Go to <b>🎟 Redeem Gift Code</b> in the menu to redeem!"
+        )
+        for uid in all_ids:
+            try:
+                bot.send_message(uid, msg_text, parse_mode="HTML")
+                success += 1
+            except Exception:
+                failed += 1
+        
+        bot.send_message(
+            call.message.chat.id,
+            f"📢 <b>Gift Code Broadcast Complete</b>\n\n"
+            f"🎟 Code: <code>{code}</code>\n"
+            f"✅ Sent: {success}\n❌ Failed: {failed}",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb()
+        )
+        bot.answer_callback_query(call.id, f"✅ Sent to {success} users")
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admgift:private:"))
+    def cb_gift_private(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+        
+        code = call.data.split(":", 2)[2]
+        user_states.set(call.from_user.id, {
+            "action": "admin_gift_send_private",
+            "gift_code": code,
+        })
+        bot.send_message(
+            call.message.chat.id,
+            "📨 <b>Send Gift Code Privately</b>\n\n"
+            f"Code: <code>{code}</code>\n\n"
+            "Enter the <b>Telegram User ID</b> to send this code to:",
             parse_mode="HTML",
             reply_markup=admin_back_kb()
         )

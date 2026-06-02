@@ -386,11 +386,11 @@ def set_maintenance_mode(enabled: bool) -> None:
 # ║  GIFT CODES helpers                                                  ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def create_gift_code(code: str, credits_value: int, max_uses: int, expires_at: datetime | None, created_by: int) -> None:
-    """Creates a new gift code."""
+def create_gift_code(code: str, points_value: int, max_uses: int, expires_at: datetime | None, created_by: int) -> None:
+    """Creates a new gift code that gives points."""
     doc = {
         "code": code,
-        "credits": credits_value,
+        "points": points_value,
         "max_uses": max_uses,
         "current_uses": 0,
         "expires_at": expires_at,
@@ -410,6 +410,7 @@ def redeem_gift_code(code: str, user_id: int) -> bool | str:
     """
     Attempts to redeem a gift code for a user.
     Returns True if successful. Returns error string if it fails.
+    Gift codes give points (referral_points), not credits.
     """
     code_doc = gift_codes_col.find_one({"code": code})
     if not code_doc:
@@ -424,7 +425,7 @@ def redeem_gift_code(code: str, user_id: int) -> bool | str:
     if user_id in code_doc.get("redeemed_by", []):
         return "You have already redeemed this code."
         
-    # Atomically update usage and user credits
+    # Atomically update usage
     result = gift_codes_col.update_one(
         {"_id": code_doc["_id"], "current_uses": {"$lt": code_doc["max_uses"]}},
         {
@@ -434,10 +435,10 @@ def redeem_gift_code(code: str, user_id: int) -> bool | str:
     )
     
     if result.modified_count == 1:
-        # Give credits
+        # Give points (referral_points), not credits
         users_col.update_one(
             {"user_id": user_id},
-            {"$inc": {"credits": code_doc["credits"]}}
+            {"$inc": {"referral_points": code_doc["points"]}}
         )
         return True
         
