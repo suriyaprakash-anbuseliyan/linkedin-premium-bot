@@ -27,6 +27,8 @@ from keyboards.inline import (
 )
 from utils.helpers import is_admin, format_datetime
 from utils.states import user_states
+import csv
+import io
 
 
 def register(bot: telebot.TeleBot):
@@ -79,6 +81,11 @@ def register(bot: telebot.TeleBot):
             _handle_add_stock(bot, message, state, text)
             return
 
+        # ── ADMIN: Bulk add stock (multi-message mode) ───────────────
+        if action == "admin_add_stock_multi" and is_admin(user_id):
+            _handle_add_stock_multi(bot, message, state, text)
+            return
+
         # ── ADMIN: Search User ───────────────────────────────────────
         if action == "admin_search_user" and is_admin(user_id):
             _handle_search_user(bot, message, text)
@@ -113,6 +120,112 @@ def register(bot: telebot.TeleBot):
         if action == "admin_gift_send_private" and is_admin(user_id):
             _handle_gift_send_private(bot, message, state, text)
             return
+
+    # ── Document handler for CSV stock uploads ───────────────────────
+    @bot.message_handler(
+        content_types=["document"],
+        func=lambda m: user_states.has(m.from_user.id)
+            and user_states.get(m.from_user.id, {}).get("action") in ("admin_add_stock", "admin_add_stock_multi")
+            and is_admin(m.from_user.id),
+    )
+    def handle_stock_csv_upload(message: telebot.types.Message):
+        """Handle CSV/TXT file uploads for bulk stock import."""
+        user_id = message.from_user.id
+        state = user_states.get(user_id)
+        if not state:
+            return
+
+        doc = message.document
+        file_name = doc.file_name or ""
+        if not file_name.lower().endswith((".csv", ".txt")):
+            bot.send_message(
+                user_id,
+                "❌ Please upload a <b>.csv</b> or <b>.txt</b> file.\n"
+                "The file should contain one link per line (or one link per row in CSV).",
+                parse_mode="HTML",
+            )
+            return
+
+        # Download the file
+        try:
+            file_info = bot.get_file(doc.file_id)
+            downloaded = bot.download_file(file_info.file_path)
+            file_content = downloaded.decode("utf-8", errors="ignore")
+        except Exception as exc:
+            bot.send_message(user_id, f"❌ Failed to download file: {exc}")
+            return
+
+        # Parse links from file
+        from utils.helpers import extract_all_linkedin_links, validate_linkedin_link
+
+        all_links = []
+        if file_name.lower().endswith(".csv"):
+            # Parse CSV — links can be in any column
+            reader = csv.reader(io.StringIO(file_content))
+            for row in reader:
+                for cell in row:
+                    cell = cell.strip()
+                    if cell:
+                        found = extract_all_linkedin_links(cell)
+                        all_links.extend(found)
+        else:
+            # Plain text file — one link per line
+            all_links = extract_all_linkedin_links(file_content)
+
+        if not all_links:
+            bot.send_message(
+                user_id,
+                "❌ No LinkedIn Premium links found in the file.\n"
+                "Make sure they contain 'linkedin.com/premium/redeem/'",
+            )
+            return
+
+        # Validate, deduplicate within the file, then add
+        product_id = state["product_id"]
+        product_name = state["product_name"]
+
+        valid_links = []
+        rejected = []
+        seen = set()
+        for url in all_links:
+            if validate_linkedin_link(url):
+                if url not in seen:
+                    valid_links.append(url)
+                    seen.add(url)
+            else:
+                rejected.append(url)
+
+        added, duplicates = 0, 0
+        if valid_links:
+            added, duplicates = add_stock_items(product_id, valid_links)
+
+        user_states.clear(user_id)
+        logger.info(
+            "CSV stock import: product=%s valid=%s rejected=%s duplicates=%s",
+            product_name, added, len(rejected), duplicates,
+        )
+
+        lines = [f"📦 <b>CSV Stock Import — {product_name}</b>\n"]
+        lines.append(f"📄 File: <code>{file_name}</code>")
+        lines.append(f"✅ New links added: <b>{added}</b>")
+        if duplicates:
+            lines.append(f"🔄 Duplicates skipped: <b>{duplicates}</b>")
+        lines.append(f"❌ Rejected (invalid format): <b>{len(rejected)}</b>")
+
+        if rejected:
+            lines.append("\n<b>Rejected links:</b>")
+            for r in rejected[:10]:
+                truncated = r[:60] + "…" if len(r) > 60 else r
+                lines.append(f"• <code>{truncated}</code>")
+            if len(rejected) > 10:
+                lines.append(f"  … and {len(rejected) - 10} more")
+
+        bot.send_message(
+            user_id,
+            "\n".join(lines),
+            parse_mode="HTML",
+            reply_markup=admin_panel_kb(),
+        )
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
@@ -345,6 +458,26 @@ def _handle_add_stock(
     product_id = state["product_id"]
     product_name = state["product_name"]
 
+    # Check if user wants to switch to multi-message mode
+    if text.lower() == "multi":
+        user_states.set(user_id, {
+            "action": "admin_add_stock_multi",
+            "product_id": product_id,
+            "product_name": product_name,
+            "accumulated_links": [],
+        })
+        bot.send_message(
+            user_id,
+            f"📦 <b>Multi-Message Stock Mode — {product_name}</b>\n\n"
+            "Send your links in <b>multiple messages</b>.\n"
+            "When you're done, type <b>done</b> to finish.\n\n"
+            "💡 This mode bypasses Telegram's message limit.\n"
+            "You can also upload a <b>.csv</b> or <b>.txt</b> file.",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb(),
+        )
+        return
+
     # Extract all possible links from the raw text
     extracted_urls = extract_all_linkedin_links(text)
     
@@ -356,32 +489,30 @@ def _handle_add_stock(
     valid_links = []
     rejected = []
     
-    # We still want to show the admin what was rejected.
-    # We can split the original text by whitespace/newlines to find rejected parts,
-    # or we can just say "X rejected" based on what failed validation.
-    # Actually, any extracted_url might fail the stricter `validate_linkedin_link` checks (like missing coupon).
     for url in extracted_urls:
         if validate_linkedin_link(url):
-            # deduplicate
+            # deduplicate within the batch
             if url not in valid_links:
                 valid_links.append(url)
         else:
             rejected.append(url)
 
-    # Add valid links to stock
-    added = 0
+    # Add valid links to stock (returns added count and duplicate count)
+    added, duplicates = 0, 0
     if valid_links:
-        added = add_stock_items(product_id, valid_links)
+        added, duplicates = add_stock_items(product_id, valid_links)
 
     user_states.clear(user_id)
     logger.info(
-        "Stock import: product=%s valid=%s rejected=%s",
-        product_name, added, len(rejected),
+        "Stock import: product=%s valid=%s rejected=%s duplicates=%s",
+        product_name, added, len(rejected), duplicates,
     )
 
     # Build response
     lines = [f"📦 <b>Stock Import — {product_name}</b>\n"]
-    lines.append(f"✅ Valid links added: <b>{added}</b>")
+    lines.append(f"✅ New links added: <b>{added}</b>")
+    if duplicates:
+        lines.append(f"🔄 Duplicates skipped: <b>{duplicates}</b>")
     lines.append(f"❌ Rejected (invalid format): <b>{len(rejected)}</b>")
 
     if rejected:
@@ -404,6 +535,94 @@ def _handle_add_stock(
         "\n".join(lines),
         parse_mode="HTML",
         reply_markup=admin_panel_kb(),
+    )
+
+
+def _handle_add_stock_multi(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    state: dict,
+    text: str,
+):
+    """Handle multi-message stock adding. Accumulates links across messages until 'done'."""
+    from utils.helpers import extract_all_linkedin_links, validate_linkedin_link
+
+    user_id = message.from_user.id
+    product_id = state["product_id"]
+    product_name = state["product_name"]
+    accumulated = state.get("accumulated_links", [])
+
+    if text.lower() == "done":
+        # Process all accumulated links
+        if not accumulated:
+            bot.send_message(
+                user_id,
+                "❌ No links were collected. Stock import cancelled.",
+                reply_markup=admin_panel_kb(),
+            )
+            user_states.clear(user_id)
+            return
+
+        valid_links = []
+        rejected = []
+        for url in accumulated:
+            if validate_linkedin_link(url):
+                if url not in valid_links:
+                    valid_links.append(url)
+            else:
+                rejected.append(url)
+
+        added, duplicates = 0, 0
+        if valid_links:
+            added, duplicates = add_stock_items(product_id, valid_links)
+
+        user_states.clear(user_id)
+        logger.info(
+            "Multi-msg stock import: product=%s valid=%s rejected=%s duplicates=%s",
+            product_name, added, len(rejected), duplicates,
+        )
+
+        lines = [f"📦 <b>Stock Import — {product_name}</b>\n"]
+        lines.append(f"✅ New links added: <b>{added}</b>")
+        if duplicates:
+            lines.append(f"🔄 Duplicates skipped: <b>{duplicates}</b>")
+        lines.append(f"❌ Rejected (invalid format): <b>{len(rejected)}</b>")
+
+        if rejected:
+            lines.append("\n<b>Rejected links:</b>")
+            for r in rejected[:10]:
+                truncated = r[:60] + "…" if len(r) > 60 else r
+                lines.append(f"• <code>{truncated}</code>")
+            if len(rejected) > 10:
+                lines.append(f"  … and {len(rejected) - 10} more")
+
+        bot.send_message(
+            user_id,
+            "\n".join(lines),
+            parse_mode="HTML",
+            reply_markup=admin_panel_kb(),
+        )
+        return
+
+    # Extract links from this message and accumulate
+    new_links = extract_all_linkedin_links(text)
+    if not new_links:
+        bot.send_message(
+            user_id,
+            "⚠️ No LinkedIn links found in that message. Try again or type <b>done</b> to finish.",
+            parse_mode="HTML",
+        )
+        return
+
+    accumulated.extend(new_links)
+    user_states.update(user_id, accumulated_links=accumulated)
+
+    bot.send_message(
+        user_id,
+        f"✅ Collected <b>{len(new_links)}</b> link(s) from this message.\n"
+        f"📊 Total so far: <b>{len(accumulated)}</b> link(s).\n\n"
+        "Send more links or type <b>done</b> to import them all.",
+        parse_mode="HTML",
     )
 
 

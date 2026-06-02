@@ -336,8 +336,14 @@ def register(bot: telebot.TeleBot):
         })
         bot.edit_message_text(
             f"📦 <b>Add Stock — {product['name']}</b>\n\n"
-            "Paste your links below, <b>one per line</b>.\n"
-            "You can paste 100+ links at once.\n\n"
+            "<b>Option 1:</b> Paste links below, <b>one per line</b>.\n"
+            "You can paste many links at once.\n\n"
+            "<b>Option 2:</b> Type <b>multi</b> to send links\n"
+            "across multiple messages (bypasses Telegram's\n"
+            "4096-char limit).\n\n"
+            "<b>Option 3:</b> Upload a <b>.csv</b> or <b>.txt</b> file\n"
+            "containing your links.\n\n"
+            "🔄 Duplicate links are automatically skipped.\n\n"
             "Example:\n"
             "<code>https://linkedin.com/premium/link1\n"
             "https://linkedin.com/premium/link2\n"
