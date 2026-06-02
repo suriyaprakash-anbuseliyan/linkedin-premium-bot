@@ -469,8 +469,20 @@ def search_database(query: str) -> dict:
     query = query.strip()
     result = {"type": "none", "data": None}
     
+    # Check if query is a URL with a coupon
+    search_term = query
+    try:
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(query)
+        if parsed.query:
+            params = parse_qs(parsed.query)
+            if "coupon" in params and params["coupon"]:
+                search_term = params["coupon"][0].strip()
+    except Exception:
+        pass
+    
     # 1. Search in stock
-    stock_item = stock_col.find_one({"content": {"$regex": query, "$options": "i"}})
+    stock_item = stock_col.find_one({"content": {"$regex": search_term, "$options": "i"}})
     if stock_item:
         result["type"] = "stock"
         result["data"] = stock_item
