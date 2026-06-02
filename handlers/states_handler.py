@@ -916,7 +916,10 @@ def _handle_gift_gen_expiry(bot: telebot.TeleBot, message: telebot.types.Message
     user_states.clear(message.from_user.id)
     
     if total_minutes > 0:
-        expiry_str = f"{hours} hrs {minutes} min"
+        if hours > 0:
+            expiry_str = f"{hours} hrs {minutes} mins"
+        else:
+            expiry_str = f"{minutes} mins"
     else:
         expiry_str = "Never"
     
@@ -924,14 +927,12 @@ def _handle_gift_gen_expiry(bot: telebot.TeleBot, message: telebot.types.Message
     
     bot.send_message(
         message.chat.id,
-        f"🎉 <b>Gift Code Generated!</b>\n\n"
-        f"┌─────────────────────────\n"
-        f"│ 🎟 Code: <code>{code}</code>\n"
-        f"│ (tap to copy)\n"
-        f"└─────────────────────────\n\n"
+        f"🎉 <b>YOUR EXCLUSIVE GIFT CODE IS READY!</b> 🎁\n\n"
+        f"🎟 <code>{code}</code>\n"
+        f"📋 Tap to Copy\n\n"
         f"🏆 Points: <b>{state['points']}</b>\n"
-        f"👥 Max Uses: <b>{state['max_uses']}</b>\n"
-        f"⏳ Expires: <b>{expiry_str}</b>",
+        f"⏳ Expires in {expiry_str}\n"
+        f"⚡ Redeem fast  !!!  before it disappears 🚀",
         parse_mode="HTML",
         reply_markup=gift_code_actions_kb(code)
     )
@@ -1099,15 +1100,26 @@ def _handle_gift_send_private(
         bot.send_message(user_id, "❌ Gift code not found.", reply_markup=admin_back_kb())
         return
     
+    expiry_str = "Never"
+    if code_doc.get("expires_at"):
+        from datetime import datetime, timezone
+        diff = code_doc["expires_at"] - datetime.now(timezone.utc)
+        if diff.total_seconds() > 0:
+            mins = int(diff.total_seconds() / 60)
+            if mins >= 60:
+                expiry_str = f"{mins//60} hrs {mins%60} mins"
+            else:
+                expiry_str = f"{mins} mins"
+        else:
+            expiry_str = "Expired"
+
     msg_text = (
-        "🎁 <b>Gift Code!</b>\n\n"
-        f"You received a private gift code:\n\n"
-        f"┌─────────────────────────\n"
-        f"│ 🎟 <code>{code}</code>\n"
-        f"│ (tap to copy)\n"
-        f"└─────────────────────────\n\n"
-        f"🏆 Points: <b>{code_doc['points']}</b>\n\n"
-        "Go to <b>🎟 Redeem Gift Code</b> in the menu to redeem!"
+        "🎉 <b>YOUR EXCLUSIVE GIFT CODE IS READY!</b> 🎁\n\n"
+        f"🎟 <code>{code}</code>\n"
+        f"📋 Tap to Copy\n\n"
+        f"🏆 Points: <b>{code_doc['points']}</b>\n"
+        f"⏳ Expires in {expiry_str}\n"
+        f"⚡ Redeem fast  !!!  before it disappears 🚀"
     )
     
     try:
