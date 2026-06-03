@@ -280,7 +280,7 @@ def register(bot: telebot.TeleBot):
     @bot.message_handler(
         content_types=["photo"],
         func=lambda m: user_states.has(m.from_user.id)
-            and user_states.get(m.from_user.id, {}).get("action") == "awaiting_qr_upload",
+            and (user_states.get(m.from_user.id) or {}).get("action") == "awaiting_qr_upload",
     )
     def handle_qr_photo_upload(message: telebot.types.Message):
         """Handle QR code image upload from user."""
