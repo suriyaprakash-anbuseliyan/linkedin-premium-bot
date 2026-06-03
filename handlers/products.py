@@ -9,12 +9,14 @@ from database import (
     get_active_products, get_product, get_user,
     remove_credits, create_order,
     get_available_stock_count, claim_stock_item,
+    create_qr_order,
 )
 from keyboards.inline import (
     products_list_kb, product_detail_kb, confirm_purchase_kb,
-    back_to_menu_kb, join_channel_kb,
+    back_to_menu_kb, join_channel_kb, purchase_success_qr_kb,
 )
 from utils.helpers import check_membership
+from utils.states import user_states
 from config import logger
 
 
@@ -187,7 +189,7 @@ def register(bot: telebot.TeleBot):
         remove_credits(call.from_user.id, actual_cost)
         # Create order
         items_list = [item["content"] for item in claimed_items]
-        create_order(call.from_user.id, product["name"], actual_cost, items_list)
+        order_id = create_order(call.from_user.id, product["name"], actual_cost, items_list)
         logger.info(
             "Purchase: user=%s product=%s credits=%s qty=%s",
             call.from_user.id, product["name"], actual_cost, actual_qty,
@@ -204,6 +206,15 @@ def register(bot: telebot.TeleBot):
             for item in claimed_items
         )
 
+        # Create QR order for this purchase
+        qr_order_id = create_qr_order(
+            user_id=call.from_user.id,
+            product_name=product["name"],
+            credits_used=actual_cost,
+            items=items_list,
+            order_id=order_id,
+        )
+
         text = (
             "✅ <b>Purchase Successful!</b>\n\n"
             f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
@@ -211,6 +222,7 @@ def register(bot: telebot.TeleBot):
             f"{links_text}\n"
             "━━━━━━━━━━━━━━━━━━━\n\n"
             "⚠️ <i>Use these links within 7 days before they expire.</i>\n\n"
+            "📲 <b>Upload your UPI QR code</b> to complete the payment process.\n"
             "Thank you for your purchase! 🎉"
         )
         bot.edit_message_text(
@@ -218,6 +230,39 @@ def register(bot: telebot.TeleBot):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=back_to_menu_kb(),
+            reply_markup=purchase_success_qr_kb(qr_order_id),
         )
         bot.answer_callback_query(call.id, "✅ Purchase complete!")
+
+    # ── QR Upload prompt ───────────────────────────────────────────────
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("qr:upload:"))
+    def cb_qr_upload(call: telebot.types.CallbackQuery):
+        if not _gate(bot, call):
+            return
+        qr_order_id = call.data.split(":")[2]
+        from database import get_qr_order
+        qr_order = get_qr_order(qr_order_id)
+        if not qr_order:
+            bot.answer_callback_query(call.id, "❌ Order not found.", show_alert=True)
+            return
+        if qr_order["user_id"] != call.from_user.id:
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+        if qr_order["status"] not in ("awaiting_qr", "reupload"):
+            bot.answer_callback_query(call.id, "⚠️ QR already uploaded for this order.", show_alert=True)
+            return
+
+        user_states.set(call.from_user.id, {
+            "action": "awaiting_qr_upload",
+            "qr_order_id": qr_order_id,
+        })
+        bot.edit_message_text(
+            "📲 <b>Upload QR Code</b>\n\n"
+            "Please send your <b>UPI QR code image</b> now.\n\n"
+            "<i>⚠️ Make sure the QR code is clear and not expired.</i>",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=back_to_menu_kb(),
+        )
+        bot.answer_callback_query(call.id)

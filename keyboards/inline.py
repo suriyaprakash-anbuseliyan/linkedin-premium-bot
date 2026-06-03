@@ -107,6 +107,27 @@ def confirm_purchase_kb(product_id: str, qty: int = 1) -> InlineKeyboardMarkup:
     return kb
 
 
+def purchase_success_qr_kb(qr_order_id: str) -> InlineKeyboardMarkup:
+    """Keyboard shown after successful purchase with Upload QR option."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("📤 Upload QR", callback_data=f"qr:upload:{qr_order_id}"),
+        InlineKeyboardButton("🔙 Back to Menu", callback_data="menu:main"),
+    )
+    return kb
+
+
+def admin_qr_review_kb(qr_order_id: str) -> InlineKeyboardMarkup:
+    """Admin keyboard for reviewing a QR upload."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("✅ Payment Approved", callback_data=f"admqr:approve:{qr_order_id}"),
+        InlineKeyboardButton("❌ Rejected / Refunded", callback_data=f"admqr:reject:{qr_order_id}"),
+        InlineKeyboardButton("🔄 Reupload QR", callback_data=f"admqr:reupload:{qr_order_id}"),
+    )
+    return kb
+
+
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║  CREDIT PACKAGES                                                    ║
 # ╚══════════════════════════════════════════════════════════════════════╝

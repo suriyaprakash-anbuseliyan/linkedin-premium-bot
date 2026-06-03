@@ -271,6 +271,91 @@ def register(bot: telebot.TeleBot):
         )
 
 
+    # ── Photo handler for QR code uploads ────────────────────────────
+    @bot.message_handler(
+        content_types=["photo"],
+        func=lambda m: user_states.has(m.from_user.id)
+            and user_states.get(m.from_user.id, {}).get("action") == "awaiting_qr_upload",
+    )
+    def handle_qr_photo_upload(message: telebot.types.Message):
+        """Handle QR code image upload from user."""
+        user_id = message.from_user.id
+        state = user_states.get(user_id)
+        if not state:
+            return
+
+        qr_order_id = state.get("qr_order_id")
+        if not qr_order_id:
+            bot.send_message(user_id, "❌ Invalid state. Please try again.")
+            user_states.clear(user_id)
+            return
+
+        from database import get_qr_order, update_qr_order_status, check_duplicate_qr
+        from keyboards.inline import admin_qr_review_kb, back_to_menu_kb
+
+        qr_order = get_qr_order(qr_order_id)
+        if not qr_order:
+            bot.send_message(user_id, "❌ Order not found.", reply_markup=back_to_menu_kb())
+            user_states.clear(user_id)
+            return
+
+        # Get the highest resolution photo
+        photo = message.photo[-1]
+        file_id = photo.file_id
+        file_unique_id = photo.file_unique_id
+
+        # Check for duplicate QR
+        if check_duplicate_qr(user_id, file_unique_id):
+            bot.send_message(
+                user_id,
+                "❌ <b>Duplicate QR Code</b>\n\n"
+                "This QR code has already been uploaded. "
+                "Please upload a <b>fresh new QR code</b>.",
+                parse_mode="HTML",
+            )
+            return  # Keep state so they can upload a different QR
+
+        # Update QR order with file info
+        update_qr_order_status(
+            qr_order_id,
+            status="qr_uploaded",
+            qr_file_id=file_id,
+            qr_file_unique_id=file_unique_id,
+        )
+        user_states.clear(user_id)
+
+        # Send success message to user
+        bot.send_message(
+            user_id,
+            "✅ <b>QR code uploaded successfully.</b>\n\n"
+            "Please wait, your order will be completed in less than a minute.",
+            parse_mode="HTML",
+            reply_markup=back_to_menu_kb(),
+        )
+
+        # Forward QR image to admin with review buttons
+        from config import ADMIN_ID
+        from utils.helpers import format_datetime
+        admin_text = (
+            "📲 <b>New QR Upload</b>\n\n"
+            f"👤 User ID: <code>{user_id}</code>\n"
+            f"👤 Username: @{message.from_user.username or 'N/A'}\n"
+            f"📦 Product: <b>{qr_order.get('product_name', 'N/A')}</b>\n"
+            f"💎 Credits Used: <b>{qr_order.get('credits_used', 0)}</b>\n"
+            f"📅 {format_datetime(qr_order.get('created_at'))}"
+        )
+        try:
+            bot.send_photo(
+                ADMIN_ID,
+                photo=file_id,
+                caption=admin_text,
+                parse_mode="HTML",
+                reply_markup=admin_qr_review_kb(qr_order_id),
+            )
+        except Exception as exc:
+            logger.error("Failed to send QR to admin: %s", exc)
+
+
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║  PAYMENT submission                                                 ║
 # ╚══════════════════════════════════════════════════════════════════════╝

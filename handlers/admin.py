@@ -991,3 +991,120 @@ def register(bot: telebot.TeleBot):
             bot.delete_message(call.message.chat.id, call.message.message_id)
             
         bot.answer_callback_query(call.id)
+
+    # ╔══════════════════════════════════════════════════════════════════╗
+    # ║  QR ORDER REVIEW                                                 ║
+    # ╚══════════════════════════════════════════════════════════════════╝
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admqr:"))
+    def cb_admin_qr_review(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+
+        parts = call.data.split(":")
+        action = parts[1]  # approve, reject, reupload
+        qr_order_id = parts[2]
+
+        from database import get_qr_order, update_qr_order_status, add_credits
+
+        qr_order = get_qr_order(qr_order_id)
+        if not qr_order:
+            bot.answer_callback_query(call.id, "❌ QR order not found.", show_alert=True)
+            return
+
+        user_id = qr_order["user_id"]
+
+        if action == "approve":
+            update_qr_order_status(qr_order_id, "approved")
+
+            # Update admin message
+            try:
+                bot.edit_message_caption(
+                    caption=call.message.caption + "\n\n✅ <b>APPROVED</b>",
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
+            # Notify user
+            try:
+                bot.send_message(
+                    user_id,
+                    "✅ <b>Your QR payment was successful.</b>",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+            bot.answer_callback_query(call.id, "✅ Payment Approved", show_alert=True)
+
+        elif action == "reject":
+            update_qr_order_status(qr_order_id, "rejected")
+
+            # Refund credits to user
+            credits_to_refund = qr_order.get("credits_used", 0)
+            if credits_to_refund > 0:
+                add_credits(user_id, credits_to_refund)
+                logger.info(
+                    "QR refund: user=%s credits=%s qr_order=%s",
+                    user_id, credits_to_refund, qr_order_id,
+                )
+
+            # Update admin message
+            try:
+                bot.edit_message_caption(
+                    caption=call.message.caption + f"\n\n❌ <b>REJECTED</b> — {credits_to_refund} credit(s) refunded",
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
+            # Notify user
+            try:
+                bot.send_message(
+                    user_id,
+                    "❌ <b>Your QR payment was rejected, and the credit has been refunded successfully.</b>",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+            bot.answer_callback_query(call.id, "❌ Rejected & Refunded", show_alert=True)
+
+        elif action == "reupload":
+            update_qr_order_status(qr_order_id, "reupload")
+
+            # Update admin message
+            try:
+                bot.edit_message_caption(
+                    caption=call.message.caption + "\n\n🔄 <b>REUPLOAD REQUESTED</b>",
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
+            # Set user state to awaiting QR upload again
+            user_states.set(user_id, {
+                "action": "awaiting_qr_upload",
+                "qr_order_id": qr_order_id,
+            })
+
+            # Notify user with reupload prompt
+            from keyboards.inline import purchase_success_qr_kb
+            try:
+                bot.send_message(
+                    user_id,
+                    "⚠️ <b>Your QR is expired or there was a payment error.</b>\n\n"
+                    "Please reupload a <b>fresh new QR code</b>.\n\n"
+                    "<i>⚠️ Do not upload the same QR code again.</i>",
+                    parse_mode="HTML",
+                    reply_markup=purchase_success_qr_kb(qr_order_id),
+                )
+            except Exception:
+                pass
+            bot.answer_callback_query(call.id, "🔄 Reupload requested", show_alert=True)

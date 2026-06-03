@@ -21,6 +21,7 @@ orders_col = db["orders"]
 stock_col = db["stock"]
 settings_col = db["settings"]
 gift_codes_col = db["gift_codes"]
+qr_orders_col = db["qr_orders"]
 
 
 # ── Indexes (idempotent – safe to call on every startup) ─────────────────
@@ -44,6 +45,10 @@ def ensure_indexes() -> None:
     stock_col.create_index([("content", ASCENDING)], unique=True, sparse=True)
 
     gift_codes_col.create_index([("code", ASCENDING)], unique=True)
+
+    qr_orders_col.create_index([("user_id", ASCENDING)])
+    qr_orders_col.create_index([("status", ASCENDING)])
+    qr_orders_col.create_index([("created_at", DESCENDING)])
 
     logger.info("MongoDB indexes ensured.")
 
@@ -567,3 +572,61 @@ def update_ui_setting(button_key: str, field: str, value: str):
         {"$set": {"key": "ui_buttons", "value": ui_settings}},
         upsert=True
     )
+
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  QR ORDER helpers                                                    ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def create_qr_order(user_id: int, product_name: str, credits_used: int,
+                    items: list[str], order_id: str) -> str:
+    """Create a QR order record after purchase. Returns the _id as string."""
+    doc = {
+        "user_id": user_id,
+        "product_name": product_name,
+        "credits_used": credits_used,
+        "items": items or [],
+        "order_id": order_id,
+        "status": "awaiting_qr",  # awaiting_qr → qr_uploaded → approved/rejected/reupload
+        "qr_file_id": None,
+        "qr_file_unique_id": None,
+        "uploaded_qr_ids": [],  # track all uploaded QR unique IDs to prevent duplicates
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": None,
+    }
+    result = qr_orders_col.insert_one(doc)
+    return str(result.inserted_id)
+
+
+def get_qr_order(qr_order_id: str) -> dict | None:
+    """Fetch a QR order by its _id."""
+    from bson import ObjectId
+    return qr_orders_col.find_one({"_id": ObjectId(qr_order_id)})
+
+
+def update_qr_order_status(qr_order_id: str, status: str,
+                           qr_file_id: str = None,
+                           qr_file_unique_id: str = None) -> None:
+    """Update a QR order's status and optionally its QR file info."""
+    from bson import ObjectId
+    update = {
+        "$set": {
+            "status": status,
+            "updated_at": datetime.now(timezone.utc),
+        }
+    }
+    if qr_file_id is not None:
+        update["$set"]["qr_file_id"] = qr_file_id
+        update["$set"]["qr_file_unique_id"] = qr_file_unique_id
+    if qr_file_unique_id is not None:
+        update.setdefault("$push", {})
+        update["$push"]["uploaded_qr_ids"] = qr_file_unique_id
+    qr_orders_col.update_one({"_id": ObjectId(qr_order_id)}, update)
+
+
+def check_duplicate_qr(user_id: int, file_unique_id: str) -> bool:
+    """Check if this QR image was already uploaded by this user in any QR order."""
+    return qr_orders_col.count_documents({
+        "user_id": user_id,
+        "uploaded_qr_ids": file_unique_id,
+    }) > 0
