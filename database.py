@@ -461,6 +461,21 @@ def set_referral_config(points_per_credit: int = None, max_free_credits: int = N
         )
 
 
+def is_credit_conversion_enabled() -> bool:
+    """Check if points-to-credits conversion is enabled. Defaults to True."""
+    doc = settings_col.find_one({"_id": "credit_conversion"})
+    return doc.get("enabled", True) if doc else True
+
+
+def set_credit_conversion_enabled(enabled: bool) -> None:
+    """Enable or disable points-to-credits conversion."""
+    settings_col.update_one(
+        {"_id": "credit_conversion"},
+        {"$set": {"enabled": enabled}},
+        upsert=True
+    )
+
+
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║  GIFT CODES helpers                                                  ║
 # ╚══════════════════════════════════════════════════════════════════════╝

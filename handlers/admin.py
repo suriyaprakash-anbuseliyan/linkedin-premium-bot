@@ -17,6 +17,7 @@ from database import (
     set_setting, ban_user, delete_user,
     is_maintenance_mode, set_maintenance_mode,
     is_referral_enabled, set_referral_enabled, get_referral_config, set_referral_config,
+    is_credit_conversion_enabled, set_credit_conversion_enabled,
 )
 from keyboards.inline import (
     admin_panel_kb, admin_back_kb,
@@ -172,11 +173,14 @@ def register(bot: telebot.TeleBot):
         
         ref_config = get_referral_config()
         is_ref = is_referral_enabled()
+        is_conv = is_credit_conversion_enabled()
         status = "🟢 Enabled" if is_ref else "🔴 Disabled"
+        conv_status = "🟢 ON" if is_conv else "🔴 OFF"
         
         text = (
             "⚙️ <b>Referral Settings</b>\n\n"
-            f"<b>Status:</b> {status}\n"
+            f"<b>Referral Program:</b> {status}\n"
+            f"<b>Credit Conversion:</b> {conv_status}\n"
             f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
             f"🎯 <b>Max Free Credits:</b> {ref_config['max_free_credits']}\n\n"
             "Tap a button below to edit:"
@@ -186,9 +190,44 @@ def register(bot: telebot.TeleBot):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=referral_settings_kb(ref_config),
+            reply_markup=referral_settings_kb(ref_config, is_conv),
         )
         bot.answer_callback_query(call.id)
+
+    # ── Credit Conversion Toggle ─────────────────────────────────────────
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:toggle_conversion")
+    def cb_toggle_conversion(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+            
+        current = is_credit_conversion_enabled()
+        set_credit_conversion_enabled(not current)
+        
+        # Re-render referral settings page
+        ref_config = get_referral_config()
+        is_ref = is_referral_enabled()
+        is_conv = not current
+        status = "🟢 Enabled" if is_ref else "🔴 Disabled"
+        conv_status = "🟢 ON" if is_conv else "🔴 OFF"
+        
+        text = (
+            "⚙️ <b>Referral Settings</b>\n\n"
+            f"<b>Referral Program:</b> {status}\n"
+            f"<b>Credit Conversion:</b> {conv_status}\n"
+            f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
+            f"🎯 <b>Max Free Credits:</b> {ref_config['max_free_credits']}\n\n"
+            "Tap a button below to edit:"
+        )
+        bot.edit_message_text(
+            text,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=referral_settings_kb(ref_config, is_conv),
+        )
+        status_text = "ON" if is_conv else "OFF"
+        bot.answer_callback_query(call.id, f"Credit Conversion: {status_text}", show_alert=True)
 
     @bot.callback_query_handler(func=lambda c: c.data == "adm:gen_gift_code")
     def cb_gen_gift_code(call: telebot.types.CallbackQuery):

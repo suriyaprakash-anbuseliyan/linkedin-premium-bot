@@ -6,7 +6,7 @@ Referral info page.
 
 import telebot
 from config import BOT_USERNAME
-from database import get_user, redeem_referral_points, is_referral_enabled, get_referral_config
+from database import get_user, redeem_referral_points, is_referral_enabled, get_referral_config, is_credit_conversion_enabled
 from keyboards.inline import referral_menu_kb, join_channel_kb, back_to_menu_kb
 from utils.helpers import check_membership
 
@@ -94,6 +94,10 @@ def register(bot: telebot.TeleBot):
 
         if not is_referral_enabled():
             bot.answer_callback_query(call.id, "🚫 Referral program is currently paused.", show_alert=True)
+            return
+
+        if not is_credit_conversion_enabled():
+            bot.answer_callback_query(call.id, "🚫 Credit conversion is currently stopped by admin.", show_alert=True)
             return
 
         user = get_user(user_id)

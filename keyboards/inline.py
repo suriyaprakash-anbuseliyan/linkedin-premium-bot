@@ -320,9 +320,14 @@ def prices_settings_kb(packages: dict) -> InlineKeyboardMarkup:
     return kb
 
 
-def referral_settings_kb(ref_config: dict) -> InlineKeyboardMarkup:
+def referral_settings_kb(ref_config: dict, is_conversion_on: bool = True) -> InlineKeyboardMarkup:
     """Keyboard for editing referral conversion settings."""
     kb = InlineKeyboardMarkup(row_width=1)
+    
+    conv_label = "🟢 Credit Conversion: ON" if is_conversion_on else "🔴 Credit Conversion: OFF"
+    kb.add(
+        InlineKeyboardButton(conv_label, callback_data="adm:toggle_conversion"),
+    )
     kb.add(
         InlineKeyboardButton(
             f"🔢 Points per Credit: {ref_config['points_per_credit']}",
