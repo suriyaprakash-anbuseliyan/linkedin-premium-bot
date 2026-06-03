@@ -170,6 +170,20 @@ def get_credit_packages() -> dict[int, dict]:
     return packages
 
 
+def get_referral_settings() -> dict:
+    """
+    Get current referral program settings from DB.
+    Returns dict with keys: is_enabled, points_per_credit, max_free_credits
+    """
+    from database import is_referral_enabled, get_referral_config
+    config = get_referral_config()
+    return {
+        "is_enabled": is_referral_enabled(),
+        "points_per_credit": config["points_per_credit"],
+        "max_free_credits": config["max_free_credits"],
+    }
+
+
 # ── UI CACHE & HELPERS ────────────────────────────────────────────────────────
 
 _ui_cache = None

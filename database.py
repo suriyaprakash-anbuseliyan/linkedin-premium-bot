@@ -404,6 +404,59 @@ def set_maintenance_mode(enabled: bool) -> None:
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
+# ║  REFERRAL PROGRAM helpers                                            ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def is_referral_enabled() -> bool:
+    """Check if the referral program is enabled. Defaults to True."""
+    doc = settings_col.find_one({"_id": "referral_program"})
+    return doc.get("enabled", True) if doc else True
+
+
+def set_referral_enabled(enabled: bool) -> None:
+    """Enable or disable the referral program."""
+    settings_col.update_one(
+        {"_id": "referral_program"},
+        {"$set": {"enabled": enabled}},
+        upsert=True
+    )
+
+
+def get_referral_config() -> dict:
+    """
+    Get referral conversion config from DB.
+    Falls back to config.py defaults if not set.
+    Returns: {"points_per_credit": int, "max_free_credits": int}
+    """
+    from config import REFERRALS_PER_CREDIT, MAX_FREE_REFERRAL_CREDITS
+    doc = settings_col.find_one({"_id": "referral_config"})
+    if doc:
+        return {
+            "points_per_credit": doc.get("points_per_credit", REFERRALS_PER_CREDIT),
+            "max_free_credits": doc.get("max_free_credits", MAX_FREE_REFERRAL_CREDITS),
+        }
+    return {
+        "points_per_credit": REFERRALS_PER_CREDIT,
+        "max_free_credits": MAX_FREE_REFERRAL_CREDITS,
+    }
+
+
+def set_referral_config(points_per_credit: int = None, max_free_credits: int = None) -> None:
+    """Update referral conversion config. Only updates provided fields."""
+    update = {}
+    if points_per_credit is not None:
+        update["points_per_credit"] = points_per_credit
+    if max_free_credits is not None:
+        update["max_free_credits"] = max_free_credits
+    if update:
+        settings_col.update_one(
+            {"_id": "referral_config"},
+            {"$set": update},
+            upsert=True
+        )
+
+
+# ╔══════════════════════════════════════════════════════════════════════╗
 # ║  GIFT CODES helpers                                                  ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 

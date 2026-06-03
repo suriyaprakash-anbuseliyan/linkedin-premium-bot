@@ -1081,6 +1081,37 @@ def _handle_edit_setting(
         bot.send_message(user_id, "❌ Value cannot be empty. Try again.")
         return
 
+    # Handle referral config keys separately (need integer validation + dedicated storage)
+    if setting_key in ("referral_points_per_credit", "referral_max_free_credits"):
+        try:
+            int_val = int(text)
+            if int_val <= 0:
+                raise ValueError
+        except ValueError:
+            bot.send_message(user_id, "❌ Please enter a valid positive integer.")
+            return
+
+        from database import set_referral_config, get_referral_config
+        from keyboards.inline import referral_settings_kb
+
+        if setting_key == "referral_points_per_credit":
+            set_referral_config(points_per_credit=int_val)
+        else:
+            set_referral_config(max_free_credits=int_val)
+
+        user_states.clear(user_id)
+        logger.info("Referral config updated: %s = %s", setting_key, int_val)
+
+        ref_config = get_referral_config()
+        bot.send_message(
+            user_id,
+            f"✅ <b>{setting_label}</b> updated!\n\n"
+            f"New value: <code>{int_val}</code>",
+            parse_mode="HTML",
+            reply_markup=referral_settings_kb(ref_config),
+        )
+        return
+
     set_setting(setting_key, text)
     user_states.clear(user_id)
     logger.info("Setting updated: %s = %s", setting_key, text)

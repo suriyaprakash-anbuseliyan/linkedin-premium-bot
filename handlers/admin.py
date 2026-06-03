@@ -16,11 +16,13 @@ from database import (
     get_available_stock_count, get_total_stock_count, add_stock_items, delete_product_stock,
     set_setting, ban_user, delete_user,
     is_maintenance_mode, set_maintenance_mode,
+    is_referral_enabled, set_referral_enabled, get_referral_config, set_referral_config,
 )
 from keyboards.inline import (
     admin_panel_kb, admin_back_kb,
     admin_products_list_kb, admin_product_actions_kb,
     admin_payment_review_kb, payment_settings_kb, prices_settings_kb,
+    referral_settings_kb,
 )
 from utils.helpers import is_admin, format_datetime, get_payment_settings, get_credit_packages
 from utils.states import user_states
@@ -47,11 +49,12 @@ def register(bot: telebot.TeleBot):
             bot.reply_to(message, "⛔ You are not authorized.")
             return
         is_maint = is_maintenance_mode()
+        is_ref = is_referral_enabled()
         bot.send_message(
             message.chat.id,
             "🔧 <b>Admin Panel</b>",
             parse_mode="HTML",
-            reply_markup=admin_panel_kb(is_maint),
+            reply_markup=admin_panel_kb(is_maint, is_ref),
         )
 
     @bot.callback_query_handler(func=lambda c: c.data == "adm:panel")
@@ -61,12 +64,13 @@ def register(bot: telebot.TeleBot):
             return
         user_states.clear(call.from_user.id)
         is_maint = is_maintenance_mode()
+        is_ref = is_referral_enabled()
         bot.edit_message_text(
             "🔧 <b>Admin Panel</b>",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=admin_panel_kb(is_maint),
+            reply_markup=admin_panel_kb(is_maint, is_ref),
         )
         bot.answer_callback_query(call.id)
 
@@ -126,15 +130,65 @@ def register(bot: telebot.TeleBot):
         set_maintenance_mode(not current)
         
         is_maint = not current
+        is_ref = is_referral_enabled()
         bot.edit_message_text(
             "🔧 <b>Admin Panel</b>",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=admin_panel_kb(is_maint),
+            reply_markup=admin_panel_kb(is_maint, is_ref),
         )
         status_text = "ON" if is_maint else "OFF"
         bot.answer_callback_query(call.id, f"Maintenance Mode: {status_text}", show_alert=True)
+
+    # ── Referral Program Toggle ──────────────────────────────────────────
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:toggle_referral")
+    def cb_toggle_referral(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+            
+        current = is_referral_enabled()
+        set_referral_enabled(not current)
+        
+        is_ref = not current
+        is_maint = is_maintenance_mode()
+        bot.edit_message_text(
+            "🔧 <b>Admin Panel</b>",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=admin_panel_kb(is_maint, is_ref),
+        )
+        status_text = "ON" if is_ref else "OFF"
+        bot.answer_callback_query(call.id, f"Referral Program: {status_text}", show_alert=True)
+
+    # ── Referral Settings ────────────────────────────────────────────────
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:referral_settings")
+    def cb_referral_settings(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+        
+        ref_config = get_referral_config()
+        is_ref = is_referral_enabled()
+        status = "🟢 Enabled" if is_ref else "🔴 Disabled"
+        
+        text = (
+            "⚙️ <b>Referral Settings</b>\n\n"
+            f"<b>Status:</b> {status}\n"
+            f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
+            f"🎯 <b>Max Free Credits:</b> {ref_config['max_free_credits']}\n\n"
+            "Tap a button below to edit:"
+        )
+        bot.edit_message_text(
+            text,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=referral_settings_kb(ref_config),
+        )
+        bot.answer_callback_query(call.id)
 
     @bot.callback_query_handler(func=lambda c: c.data == "adm:gen_gift_code")
     def cb_gen_gift_code(call: telebot.types.CallbackQuery):
@@ -788,6 +842,18 @@ def register(bot: telebot.TeleBot):
             packages = get_credit_packages()
             pkg = packages.get(int(qty), {})
             current = pkg.get(parts[2], "N/A")
+        elif setting_key.startswith("referral_"):
+            ref_config = get_referral_config()
+            referral_labels = {
+                "referral_points_per_credit": "🔢 Points per Credit",
+                "referral_max_free_credits": "🎯 Max Free Credits",
+            }
+            referral_config_keys = {
+                "referral_points_per_credit": "points_per_credit",
+                "referral_max_free_credits": "max_free_credits",
+            }
+            label = referral_labels.get(setting_key, setting_key)
+            current = ref_config.get(referral_config_keys.get(setting_key, ""), "N/A")
         else:
             labels = {
                 "upi_id": "💳 UPI ID",

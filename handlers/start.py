@@ -13,7 +13,7 @@ import telebot
 from config import BOT_USERNAME, REFERRALS_PER_CREDIT, logger
 from database import (
     get_user, register_user, get_user_by_referral_code,
-    increment_referral_count,
+    increment_referral_count, is_referral_enabled,
 )
 from keyboards.inline import join_channel_kb, main_menu_kb
 from utils.helpers import check_membership, generate_referral_code
@@ -66,8 +66,8 @@ def register(bot: telebot.TeleBot):
             ref_code = generate_referral_code()
             referred_by: str | None = None
 
-            # Validate referral
-            if referral_payload:
+            # Validate referral (only if referral program is enabled)
+            if referral_payload and is_referral_enabled():
                 referrer = get_user_by_referral_code(referral_payload)
                 if referrer and referrer["user_id"] != user_id:
                     referred_by = referral_payload
@@ -118,7 +118,7 @@ def register(bot: telebot.TeleBot):
             state = user_states.get(user_id) or {}
             referral_payload = state.get("pending_referral")
             
-            if referral_payload:
+            if referral_payload and is_referral_enabled():
                 referrer = get_user_by_referral_code(referral_payload)
                 if referrer and referrer["user_id"] != user_id:
                     referred_by = referral_payload

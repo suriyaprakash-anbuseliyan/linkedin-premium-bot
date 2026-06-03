@@ -162,7 +162,7 @@ def admin_payment_review_kb(payment_id: str) -> InlineKeyboardMarkup:
 # ║  ADMIN PANEL                                                        ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def admin_panel_kb(is_maintenance: bool = False) -> InlineKeyboardMarkup:
+def admin_panel_kb(is_maintenance: bool = False, is_referral: bool = True) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
         InlineKeyboardButton("➕ Add Product", callback_data="adm:add_product"),
@@ -193,6 +193,12 @@ def admin_panel_kb(is_maintenance: bool = False) -> InlineKeyboardMarkup:
     kb.add(
         InlineKeyboardButton(maint_label, callback_data="adm:toggle_maintenance"),
         InlineKeyboardButton("🎁 Generate Gift Code", callback_data="adm:gen_gift_code"),
+    )
+    
+    ref_label = "🟢 Referral: ON" if is_referral else "🔴 Referral: OFF"
+    kb.add(
+        InlineKeyboardButton(ref_label, callback_data="adm:toggle_referral"),
+        InlineKeyboardButton("⚙️ Referral Settings", callback_data="adm:referral_settings"),
     )
     return kb
 
@@ -290,6 +296,23 @@ def prices_settings_kb(packages: dict) -> InlineKeyboardMarkup:
             InlineKeyboardButton(f"✏️ {qty} Credit(s) - Binance ($)", callback_data=f"admset:pkg_{qty}_usdt"),
         )
     kb.add(InlineKeyboardButton("🔙 Back to Settings", callback_data="adm:payment_settings"))
+    return kb
+
+
+def referral_settings_kb(ref_config: dict) -> InlineKeyboardMarkup:
+    """Keyboard for editing referral conversion settings."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton(
+            f"🔢 Points per Credit: {ref_config['points_per_credit']}",
+            callback_data="admset:referral_points_per_credit",
+        ),
+        InlineKeyboardButton(
+            f"🎯 Max Free Credits: {ref_config['max_free_credits']}",
+            callback_data="admset:referral_max_free_credits",
+        ),
+    )
+    kb.add(InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"))
     return kb
 
 
