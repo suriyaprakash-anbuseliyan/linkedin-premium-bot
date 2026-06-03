@@ -68,6 +68,7 @@ def register(bot: telebot.TeleBot):
 
         action = state.get("action")
         text = message.text.strip() if message.text else ""
+        html_text = getattr(message, 'html_text', message.text or "").strip()
 
         # ── PAYMENT: UTR number ──────────────────────────────────────
         if action == "awaiting_utr":
@@ -129,7 +130,7 @@ def register(bot: telebot.TeleBot):
 
         # ── ADMIN: Broadcast ─────────────────────────────────────────
         if action == "admin_broadcast" and is_admin(user_id):
-            _handle_broadcast(bot, message, text)
+            _handle_broadcast(bot, message, html_text)
             return
 
         # ── ADMIN: Edit payment setting ──────────────────────────────
@@ -144,7 +145,7 @@ def register(bot: telebot.TeleBot):
 
         # ── ADMIN: Edit Product ──────────────────────────────────────
         if action == "admin_edit_product" and is_admin(user_id):
-            _handle_admin_edit_product(bot, message, state, text)
+            _handle_admin_edit_product(bot, message, state, text, html_text)
             return
 
         # ── ADMIN: Send Gift Code Privately ──────────────────────────
@@ -159,7 +160,7 @@ def register(bot: telebot.TeleBot):
 
         # ── ADMIN: Send Direct Message ───────────────────────────────
         if action == "admin_send_msg" and is_admin(user_id):
-            _handle_admin_send_msg(bot, message, state, text)
+            _handle_admin_send_msg(bot, message, state, html_text)
             return
 
         # ── ADMIN: UI Settings (Text / Emoji) ────────────────────────
@@ -564,6 +565,7 @@ def _handle_admin_edit_product(
     message: telebot.types.Message,
     state: dict,
     text: str,
+    html_text: str,
 ):
     from database import update_product
     from keyboards.inline import admin_panel_kb
@@ -586,9 +588,9 @@ def _handle_admin_edit_product(
         update_product(pid, {"$set": {"name": text.strip()}})
         field_str = "Name"
     elif field == "desc":
-        html_desc = getattr(message, 'html_text', message.text)
+        html_desc = html_text
         if not html_desc:
-            html_desc = message.text
+            html_desc = text
         update_product(pid, {"$set": {"description": html_desc.strip() if html_desc else ""}})
         field_str = "Description"
         
