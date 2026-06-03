@@ -407,7 +407,10 @@ def _handle_add_product_step(
         )
 
     elif step == "description":
-        user_states.update(user_id, step="credit_cost", product_desc=text)
+        html_desc = getattr(message, 'html_text', message.text)
+        if not html_desc:
+            html_desc = message.text
+        user_states.update(user_id, step="credit_cost", product_desc=html_desc.strip() if html_desc else "")
         bot.send_message(
             user_id,
             "Step 3/3 — Enter the <b>credit cost</b> (integer):",
@@ -473,7 +476,10 @@ def _handle_admin_edit_product(
         update_product(pid, {"$set": {"name": text.strip()}})
         field_str = "Name"
     elif field == "desc":
-        update_product(pid, {"$set": {"description": text.strip()}})
+        html_desc = getattr(message, 'html_text', message.text)
+        if not html_desc:
+            html_desc = message.text
+        update_product(pid, {"$set": {"description": html_desc.strip() if html_desc else ""}})
         field_str = "Description"
         
     user_states.clear(user_id)
