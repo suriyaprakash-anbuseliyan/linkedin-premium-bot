@@ -77,15 +77,23 @@ def register(bot: telebot.TeleBot):
                         _maybe_award_referral(bot, updated_referrer)
 
             register_user(user_id, username, first_name, ref_code, referred_by)
+            bot.send_message(
+                chat_id,
+                f"👋 <b>Welcome {username}!</b>\n\n"
+                "You have successfully registered. Let's get started!",
+                parse_mode="HTML",
+                reply_markup=main_menu_kb()
+            )
+            from database import is_welcome_bonus_enabled
+            if is_welcome_bonus_enabled():
+                bot.send_message(
+                    chat_id,
+                    "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free credits in the Referral menu!",
+                    parse_mode="HTML"
+                )
             logger.info("New user registered: %s (%s)", user_id, username)
             from utils.helpers import announce_event
             announce_event(bot, "NEW USER JOINED", user_id, 0, "Registered")
-            
-            bot.send_message(
-                user_id,
-                "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free credits in the Referral menu!",
-                parse_mode="HTML"
-            )
 
         # ── Show main menu ───────────────────────────────────────────
         bot.send_message(
@@ -138,11 +146,13 @@ def register(bot: telebot.TeleBot):
             from utils.helpers import announce_event
             announce_event(bot, "NEW USER JOINED", user_id, 0, "Registered")
             
-            bot.send_message(
-                user_id,
-                "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free credits in the Referral menu!",
-                parse_mode="HTML"
-            )
+            from database import is_welcome_bonus_enabled
+            if is_welcome_bonus_enabled():
+                bot.send_message(
+                    user_id,
+                    "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free credits in the Referral menu!",
+                    parse_mode="HTML"
+                )
 
         bot.edit_message_text(
             WELCOME_TEXT,

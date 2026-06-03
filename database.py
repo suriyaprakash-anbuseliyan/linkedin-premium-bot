@@ -72,7 +72,7 @@ def register_user(user_id: int, username: str, first_name: str,
         "referral_code": referral_code,
         "referred_by": referred_by,
         "referral_count": 0,
-        "referral_points": 1,
+        "referral_points": 1 if is_welcome_bonus_enabled() else 0,
         "free_referral_credits": 0,
         "joined_at": datetime.now(timezone.utc),
     }
@@ -478,6 +478,21 @@ def set_credit_conversion_enabled(enabled: bool) -> None:
     """Enable or disable points-to-credits conversion."""
     settings_col.update_one(
         {"_id": "credit_conversion"},
+        {"$set": {"enabled": enabled}},
+        upsert=True
+    )
+
+
+def is_welcome_bonus_enabled() -> bool:
+    """Check if the welcome bonus (1 point on registration) is enabled. Defaults to True."""
+    doc = settings_col.find_one({"_id": "welcome_bonus"})
+    return doc.get("enabled", True) if doc else True
+
+
+def set_welcome_bonus_enabled(enabled: bool) -> None:
+    """Enable or disable the welcome bonus."""
+    settings_col.update_one(
+        {"_id": "welcome_bonus"},
         {"$set": {"enabled": enabled}},
         upsert=True
     )

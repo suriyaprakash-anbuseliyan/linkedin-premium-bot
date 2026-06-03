@@ -172,15 +172,19 @@ def register(bot: telebot.TeleBot):
             return
         
         ref_config = get_referral_config()
+        from database import is_referral_enabled, is_credit_conversion_enabled, is_welcome_bonus_enabled
         is_ref = is_referral_enabled()
         is_conv = is_credit_conversion_enabled()
+        is_welcome = is_welcome_bonus_enabled()
         status = "🟢 Enabled" if is_ref else "🔴 Disabled"
         conv_status = "🟢 ON" if is_conv else "🔴 OFF"
+        welcome_status = "🟢 ON" if is_welcome else "🔴 OFF"
         
         text = (
             "⚙️ <b>Referral Settings</b>\n\n"
             f"<b>Referral Program:</b> {status}\n"
             f"<b>Credit Conversion:</b> {conv_status}\n"
+            f"<b>Welcome Bonus:</b> {welcome_status}\n"
             f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
             f"🎯 <b>Max Free Credits:</b> {ref_config['max_free_credits']}\n\n"
             "Tap a button below to edit:"
@@ -190,7 +194,7 @@ def register(bot: telebot.TeleBot):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=referral_settings_kb(ref_config, is_conv),
+            reply_markup=referral_settings_kb(ref_config, is_conv, is_welcome),
         )
         bot.answer_callback_query(call.id)
 
@@ -202,19 +206,23 @@ def register(bot: telebot.TeleBot):
             return
             
         current = is_credit_conversion_enabled()
+        from database import set_credit_conversion_enabled, is_referral_enabled, is_welcome_bonus_enabled
         set_credit_conversion_enabled(not current)
         
         # Re-render referral settings page
         ref_config = get_referral_config()
         is_ref = is_referral_enabled()
         is_conv = not current
+        is_welcome = is_welcome_bonus_enabled()
         status = "🟢 Enabled" if is_ref else "🔴 Disabled"
         conv_status = "🟢 ON" if is_conv else "🔴 OFF"
+        welcome_status = "🟢 ON" if is_welcome else "🔴 OFF"
         
         text = (
             "⚙️ <b>Referral Settings</b>\n\n"
             f"<b>Referral Program:</b> {status}\n"
             f"<b>Credit Conversion:</b> {conv_status}\n"
+            f"<b>Welcome Bonus:</b> {welcome_status}\n"
             f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
             f"🎯 <b>Max Free Credits:</b> {ref_config['max_free_credits']}\n\n"
             "Tap a button below to edit:"
@@ -224,10 +232,48 @@ def register(bot: telebot.TeleBot):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=referral_settings_kb(ref_config, is_conv),
+            reply_markup=referral_settings_kb(ref_config, is_conv, is_welcome),
         )
         status_text = "ON" if is_conv else "OFF"
         bot.answer_callback_query(call.id, f"Credit Conversion: {status_text}", show_alert=True)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:toggle_welcome_bonus")
+    def cb_toggle_welcome_bonus(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+            
+        from database import is_welcome_bonus_enabled, set_welcome_bonus_enabled, is_referral_enabled, is_credit_conversion_enabled
+        current = is_welcome_bonus_enabled()
+        set_welcome_bonus_enabled(not current)
+        
+        # Re-render referral settings page
+        ref_config = get_referral_config()
+        is_ref = is_referral_enabled()
+        is_conv = is_credit_conversion_enabled()
+        is_welcome = not current
+        status = "🟢 Enabled" if is_ref else "🔴 Disabled"
+        conv_status = "🟢 ON" if is_conv else "🔴 OFF"
+        welcome_status = "🟢 ON" if is_welcome else "🔴 OFF"
+        
+        text = (
+            "⚙️ <b>Referral Settings</b>\n\n"
+            f"<b>Referral Program:</b> {status}\n"
+            f"<b>Credit Conversion:</b> {conv_status}\n"
+            f"<b>Welcome Bonus:</b> {welcome_status}\n"
+            f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
+            f"🎯 <b>Max Free Credits:</b> {ref_config['max_free_credits']}\n\n"
+            "Tap a button below to edit:"
+        )
+        bot.edit_message_text(
+            text,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=referral_settings_kb(ref_config, is_conv, is_welcome),
+        )
+        status_text = "ON" if is_welcome else "OFF"
+        bot.answer_callback_query(call.id, f"Welcome Bonus: {status_text}", show_alert=True)
 
     @bot.callback_query_handler(func=lambda c: c.data == "adm:gen_gift_code")
     def cb_gen_gift_code(call: telebot.types.CallbackQuery):
