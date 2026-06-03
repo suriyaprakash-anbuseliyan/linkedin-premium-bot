@@ -854,6 +854,48 @@ def register(bot: telebot.TeleBot):
                 reply_markup=admin_back_kb(),
             )
             
+        elif action == "convert":
+            points = user.get("referral_points", 0)
+            from database import get_referral_config, users_col
+            config = get_referral_config()
+            ppc = config["points_per_credit"]
+            
+            if points < ppc:
+                bot.answer_callback_query(call.id, f"❌ Not enough points. User has {points}, {ppc} points needed for 1 credit.", show_alert=True)
+                return
+                
+            credits_to_add = points // ppc
+            points_to_deduct = credits_to_add * ppc
+            
+            users_col.update_one(
+                {"user_id": target_id},
+                {"$inc": {"credits": credits_to_add, "free_referral_credits": credits_to_add, "referral_points": -points_to_deduct}}
+            )
+            bot.answer_callback_query(call.id, f"✅ Converted {points_to_deduct} points into {credits_to_add} credits.", show_alert=True)
+            
+            # Re-fetch user and re-render
+            user = search_user_by_id(target_id)
+            from utils.helpers import format_datetime
+            info = (
+                "👤 <b>User Info</b>\n\n"
+                f"🆔 ID: <code>{user['user_id']}</code>\n"
+                f"👤 Username: @{user.get('username', 'N/A')}\n"
+                f"📛 Name: {user.get('first_name', 'N/A')}\n"
+                f"💎 Credits: {user['credits']}\n"
+                f"⭐ Points: {user.get('referral_points', 0)}\n"
+                f"👥 Referrals: {user['referral_count']}\n"
+                f"🎁 Free Credits: {user['free_referral_credits']}\n"
+                f"🔗 Referred By: {user.get('referred_by', 'N/A')}\n"
+                f"📅 Joined: {format_datetime(user.get('joined_at'))}"
+            )
+            bot.edit_message_text(
+                info,
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=admin_user_actions_kb(user['user_id'], user.get('is_banned', False))
+            )
+            
         elif action == "unban":
             ban_user(target_id, False)
             bot.answer_callback_query(call.id, "User unbanned successfully.", show_alert=True)

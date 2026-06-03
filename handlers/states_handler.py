@@ -857,6 +857,7 @@ def _handle_search_user(
         f"👤 Username: @{user.get('username', 'N/A')}\n"
         f"📛 Name: {user.get('first_name', 'N/A')}\n"
         f"💎 Credits: {user['credits']}\n"
+        f"⭐ Points: {user.get('referral_points', 0)}\n"
         f"👥 Referrals: {user['referral_count']}\n"
         f"🎁 Free Credits: {user['free_referral_credits']}\n"
         f"🔗 Referred By: {user.get('referred_by', 'N/A')}\n"
