@@ -87,21 +87,16 @@ def main():
 
     # ── Startup Broadcast ────────────────────────────────────────────
     def broadcast_online():
-        import time
-        from database import get_all_user_ids
-        users = get_all_user_ids()
-        logger.info(f"Broadcasting startup message to {len(users)} users...")
-        for uid in users:
-            try:
-                bot.send_message(
-                    uid,
-                    "✅ <b>We are back online!</b>\n\nThe bot is now fully operational.",
-                    parse_mode="HTML"
-                )
-            except Exception:
-                pass
-            time.sleep(0.1)  # Sleep to avoid hitting rate limits
-        logger.info("Startup broadcast finished.")
+        from config import ADMIN_ID
+        try:
+            bot.send_message(
+                ADMIN_ID,
+                "✅ <b>Server updated</b>",
+                parse_mode="HTML"
+            )
+            logger.info("Sent startup notification to admin.")
+        except Exception as exc:
+            logger.error("Failed to send startup notification to admin: %s", exc)
         
     import threading
     threading.Thread(target=broadcast_online, daemon=True).start()
