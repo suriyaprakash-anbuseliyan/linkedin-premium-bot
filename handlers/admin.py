@@ -1199,10 +1199,20 @@ def register(bot: telebot.TeleBot):
             credits_to_refund = qr_order.get("credits_used", 0)
             if credits_to_refund > 0:
                 add_credits(user_id, credits_to_refund)
-                logger.info(
-                    "QR refund: user=%s credits=%s qr_order=%s",
-                    user_id, credits_to_refund, qr_order_id,
-                )
+                
+            # Refund stock to inventory
+            from database import refund_stock
+            refund_stock(
+                product_id=qr_order.get("product_id"),
+                qty=qr_order.get("qty", 1),
+                is_numerical=qr_order.get("is_numerical", False),
+                items=qr_order.get("items", [])
+            )
+
+            logger.info(
+                "QR reject: user=%s credits_refunded=%s qr_order=%s",
+                user_id, credits_to_refund, qr_order_id,
+            )
 
             # Update admin message
             try:

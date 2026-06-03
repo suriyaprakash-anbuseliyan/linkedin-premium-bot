@@ -601,12 +601,16 @@ def update_ui_setting(button_key: str, field: str, value: str):
 # ╚══════════════════════════════════════════════════════════════════════╝
 
 def create_qr_order(user_id: int, product_name: str, credits_used: int,
-                    items: list[str], order_id: str) -> str:
+                    items: list[str], order_id: str, product_id: str = None, 
+                    qty: int = 1, is_numerical: bool = False) -> str:
     """Create a QR order record after purchase. Returns the _id as string."""
     doc = {
         "user_id": user_id,
+        "product_id": product_id,
         "product_name": product_name,
         "credits_used": credits_used,
+        "qty": qty,
+        "is_numerical": is_numerical,
         "items": items or [],
         "order_id": order_id,
         "status": "awaiting_qr",  # awaiting_qr → qr_uploaded → approved/rejected/reupload
@@ -647,8 +651,44 @@ def update_qr_order_status(qr_order_id: str, status: str,
 
 
 def check_duplicate_qr(user_id: int, file_unique_id: str) -> bool:
-    """Check if this QR image was already uploaded by this user in any QR order."""
-    return qr_orders_col.count_documents({
+    """Check if the exact same QR code was previously uploaded by this user."""
+    # We check if the file_unique_id exists in *any* of the user's qr_orders' uploaded_qr_ids
+    existing = qr_orders_col.find_one({
         "user_id": user_id,
-        "uploaded_qr_ids": file_unique_id,
-    }) > 0
+        "uploaded_qr_ids": file_unique_id
+    })
+    return existing is not None
+
+
+def has_pending_qr_order(user_id: int) -> bool:
+    """Check if the user has an active, uncompleted QR order."""
+    count = qr_orders_col.count_documents({
+        "user_id": user_id,
+        "status": {"$in": ["awaiting_qr", "qr_uploaded", "reupload"]}
+    })
+    return count > 0
+
+
+def refund_stock(product_id: str, qty: int, is_numerical: bool, items: list[str]) -> None:
+    """Refund stock back to the inventory when an order is rejected."""
+    if not product_id:
+        return
+        
+    from bson import ObjectId
+    try:
+        pid = ObjectId(product_id)
+    except Exception:
+        return
+
+    if is_numerical:
+        products_col.update_one(
+            {"_id": pid},
+            {"$inc": {"numerical_stock": qty}}
+        )
+    else:
+        if not items:
+            return
+        stock_col.update_many(
+            {"product_id": pid, "content": {"$in": items}},
+            {"$set": {"is_sold": False, "sold_to": None, "sold_at": None}}
+        )

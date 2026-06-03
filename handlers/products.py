@@ -116,6 +116,33 @@ def register(bot: telebot.TeleBot):
             )
             return
 
+        requires_qr = product.get("requires_qr", False)
+
+        if requires_qr:
+            # Enforce strictly 1 pending QR order at a time
+            from database import has_pending_qr_order
+            if has_pending_qr_order(call.from_user.id):
+                bot.answer_callback_query(call.id, "❌ You have an active QR payment. Please wait for it to be reviewed before placing a new order.", show_alert=True)
+                return
+            
+            # Skip quantity step, enforce qty = 1
+            qty = 1
+            total_cost = product["credit_cost"] * qty
+            from keyboards.inline import confirm_purchase_kb
+            bot.edit_message_text(
+                f"🛒 <b>Confirm Purchase</b>\n\n"
+                f"📦 Product: <b>{product['name']}</b>\n"
+                f"🔢 Quantity: <b>{qty}</b>\n"
+                f"💰 Total Cost: <b>{total_cost}</b> credits\n\n"
+                "Proceed with purchase?",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=confirm_purchase_kb(product_id, qty)
+            )
+            bot.answer_callback_query(call.id)
+            return
+
         from utils.states import user_states
         user_states.set(call.from_user.id, {
             "action": "buy_quantity",
@@ -125,7 +152,7 @@ def register(bot: telebot.TeleBot):
         
         bot.edit_message_text(
             f"🛒 <b>{product['name']}</b>\n\n"
-            f"How many links would you like to buy?\n"
+            f"How many would you like to buy?\n"
             f"(Available stock: {stock})\n\n"
             "<i>Please type a number below:</i>",
             chat_id=call.message.chat.id,
@@ -211,12 +238,20 @@ def register(bot: telebot.TeleBot):
 
         # Create QR order for this purchase if required
         if requires_qr:
+            from database import has_pending_qr_order
+            if has_pending_qr_order(call.from_user.id):
+                bot.answer_callback_query(call.id, "❌ You have an active QR payment. Please wait for it to be reviewed before placing a new order.", show_alert=True)
+                return
+
             qr_order_id = create_qr_order(
                 user_id=call.from_user.id,
+                product_id=product_id,
                 product_name=product["name"],
                 credits_used=actual_cost,
                 items=items_list,
                 order_id=order_id,
+                qty=actual_qty,
+                is_numerical=is_num,
             )
             qr_text = "📲 <b>Upload your UPI QR code</b> to complete the payment process.\n"
             reply_markup = purchase_success_qr_kb(qr_order_id)
