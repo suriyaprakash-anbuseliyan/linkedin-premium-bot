@@ -169,42 +169,43 @@ def register(bot: telebot.TeleBot):
             bot.answer_callback_query(call.id, "❌ Not enough stock! Try a smaller quantity.", show_alert=True)
             return
 
-        # Claim qty links
+        is_num = product.get("is_numerical", False)
         claimed_items = []
-        for _ in range(qty):
-            item = claim_stock_item(product_id, call.from_user.id)
-            if item:
-                claimed_items.append(item)
-                
-        if not claimed_items:
-            bot.answer_callback_query(
-                call.id, "❌ Out of stock! Try again later.", show_alert=True,
-            )
-            return
+        actual_qty = qty
+        
+        if is_num:
+            # Deduct numerical stock directly
+            from database import update_product
+            update_product(product_id, {"$inc": {"numerical_stock": -qty}})
+        else:
+            # Claim physical links
+            for _ in range(qty):
+                item = claim_stock_item(product_id, call.from_user.id)
+                if item:
+                    claimed_items.append(item)
+                    
+            if not claimed_items:
+                bot.answer_callback_query(call.id, "❌ Out of stock! Try again later.", show_alert=True)
+                return
+            actual_qty = len(claimed_items)
 
-        actual_qty = len(claimed_items)
         actual_cost = product["credit_cost"] * actual_qty
 
         # Deduct credits
         remove_credits(call.from_user.id, actual_cost)
+        
         # Create order
-        items_list = [item["content"] for item in claimed_items]
+        items_list = [item["content"] for item in claimed_items] if not is_num else [f"Service Order (x{actual_qty})"]
         order_id = create_order(call.from_user.id, product["name"], actual_cost, items_list)
         logger.info(
-            "Purchase: user=%s product=%s credits=%s qty=%s",
-            call.from_user.id, product["name"], actual_cost, actual_qty,
+            "Purchase: user=%s product=%s credits=%s qty=%s is_numerical=%s",
+            call.from_user.id, product["name"], actual_cost, actual_qty, is_num
         )
         u = get_user(call.from_user.id)
         if u:
             from utils.helpers import announce_event
-            announce_event(bot, "PRODUCT PURCHASED", call.from_user.id, u["credits"], f"Purchased {actual_qty} link(s)")
-
-        # Build text output for multiple links
-        links_text = "\n\n".join(
-            f"🔗 {item['content']}\n"
-            f"⏰ Expires: {item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'}"
-            for item in claimed_items
-        )
+            lbl = "service(s)" if is_num else "link(s)"
+            announce_event(bot, "PRODUCT PURCHASED", call.from_user.id, u["credits"], f"Purchased {actual_qty} {lbl}")
 
         # Create QR order for this purchase
         qr_order_id = create_qr_order(
@@ -215,13 +216,20 @@ def register(bot: telebot.TeleBot):
             order_id=order_id,
         )
 
+        if is_num:
+            links_block = ""
+        else:
+            links_text = "\n\n".join(
+                f"🔗 {item['content']}\n"
+                f"⏰ Expires: {item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'}"
+                for item in claimed_items
+            )
+            links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n⚠️ <i>Use these links within 7 days before they expire.</i>\n\n"
+
         text = (
             "✅ <b>Purchase Successful!</b>\n\n"
             f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
-            f"{links_text}\n"
-            "━━━━━━━━━━━━━━━━━━━\n\n"
-            "⚠️ <i>Use these links within 7 days before they expire.</i>\n\n"
+            f"{links_block}"
             "📲 <b>Upload your UPI QR code</b> to complete the payment process.\n"
             "Thank you for your purchase! 🎉"
         )

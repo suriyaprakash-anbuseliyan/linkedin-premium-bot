@@ -375,7 +375,7 @@ def admin_products_list_kb(products: list[dict]) -> InlineKeyboardMarkup:
     return kb
 
 
-def admin_product_actions_kb(product_id: str, is_active: bool) -> InlineKeyboardMarkup:
+def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: bool = False) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     toggle_label = "🔴 Disable" if is_active else "🟢 Enable"
     toggle_cb = f"admprod:toggle:{product_id}"
@@ -384,13 +384,34 @@ def admin_product_actions_kb(product_id: str, is_active: bool) -> InlineKeyboard
         InlineKeyboardButton("📝 Edit Name", callback_data=f"admprod:edit_name:{product_id}"),
         InlineKeyboardButton("📝 Edit Desc", callback_data=f"admprod:edit_desc:{product_id}"),
     )
-    kb.add(
-        InlineKeyboardButton("💰 Edit Cost", callback_data=f"admprod:edit_cost:{product_id}"),
-        InlineKeyboardButton("📦 Add Stock", callback_data=f"admprod:addstock:{product_id}"),
-    )
+    
+    # Stock and switch toggle
+    if is_numerical:
+        kb.add(
+            InlineKeyboardButton("💰 Edit Cost", callback_data=f"admprod:edit_cost:{product_id}"),
+            InlineKeyboardButton("✏️ Set Stock Limit", callback_data=f"admprod:set_num_stock:{product_id}"),
+        )
+        kb.add(InlineKeyboardButton("🔁 Switch to Links", callback_data=f"admprod:toggle_numerical:{product_id}"))
+    else:
+        kb.add(
+            InlineKeyboardButton("💰 Edit Cost", callback_data=f"admprod:edit_cost:{product_id}"),
+            InlineKeyboardButton("📦 Add Stock", callback_data=f"admprod:addstock:{product_id}"),
+        )
+        kb.add(InlineKeyboardButton("🔁 Switch to Numerical", callback_data=f"admprod:toggle_numerical:{product_id}"))
+        
     kb.add(
         InlineKeyboardButton(toggle_label, callback_data=toggle_cb),
         InlineKeyboardButton("🗑 Delete", callback_data=f"admprod:delete:{product_id}"),
     )
     kb.add(InlineKeyboardButton("🔙 Back", callback_data="adm:manage_products"))
+    return kb
+
+def admin_stock_type_kb() -> InlineKeyboardMarkup:
+    """Keyboard for selecting stock type during product creation."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("🔗 Links / Coupons", callback_data="admprod:stock_type:links"),
+        InlineKeyboardButton("🔢 Numerical Service", callback_data="admprod:stock_type:numerical"),
+        InlineKeyboardButton("🔙 Cancel", callback_data="adm:panel")
+    )
     return kb

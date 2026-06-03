@@ -102,6 +102,11 @@ def register(bot: telebot.TeleBot):
             _handle_add_product_step(bot, message, state, text)
             return
 
+        # ── ADMIN: Set numerical stock ───────────────────────────────
+        if action == "admin_set_num_stock" and is_admin(user_id):
+            _handle_admin_set_num_stock(bot, message, state, text)
+            return
+
         # ── ADMIN: Bulk add stock ────────────────────────────────────
         if action == "admin_add_stock" and is_admin(user_id):
             _handle_add_stock(bot, message, state, text)
@@ -512,21 +517,41 @@ def _handle_add_product_step(
             bot.send_message(user_id, "❌ Please enter a valid positive integer.")
             return
 
+        user_states.update(user_id, step="stock_type", product_cost=cost)
+        from keyboards.inline import admin_stock_type_kb
+        bot.send_message(
+            user_id,
+            "Step 4/5 — Select the <b>Stock Type</b>:",
+            parse_mode="HTML",
+            reply_markup=admin_stock_type_kb(),
+        )
+
+    elif step == "numerical_stock":
+        try:
+            initial_stock = int(text)
+            if initial_stock < 0:
+                raise ValueError
+        except ValueError:
+            bot.send_message(user_id, "❌ Please enter a valid non-negative integer.")
+            return
+
         product_id = create_product(
             name=state["product_name"],
             description=state["product_desc"],
-            credit_cost=cost,
+            credit_cost=state["product_cost"],
+            is_numerical=True,
+            numerical_stock=initial_stock,
         )
         user_states.clear(user_id)
-        logger.info("Product created: %s (id=%s)", state["product_name"], product_id)
+        logger.info("Product created (Numerical): %s (id=%s)", state["product_name"], product_id)
         bot.send_message(
             user_id,
             f"✅ <b>Product Created!</b>\n\n"
             f"Name: <b>{state['product_name']}</b>\n"
-            f"Cost: {cost} credits\n"
-            f"ID: <code>{product_id}</code>\n\n"
-            "📦 Now go to <b>Manage Products</b> → select this product → "
-            "<b>Add Stock</b> to bulk-import your links.",
+            f"Cost: {state['product_cost']} credits\n"
+            f"Type: Numerical Service\n"
+            f"Initial Stock: {initial_stock}\n"
+            f"ID: <code>{product_id}</code>",
             parse_mode="HTML",
             reply_markup=admin_panel_kb(),
         )
@@ -572,6 +597,40 @@ def _handle_admin_edit_product(
     bot.send_message(
         user_id,
         f"✅ Product {field_str} updated successfully!",
+        reply_markup=admin_panel_kb()
+    )
+
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  ADMIN: Set numerical stock                                         ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+def _handle_admin_set_num_stock(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    state: dict,
+    text: str,
+):
+    from database import update_product
+    from keyboards.inline import admin_panel_kb
+    
+    user_id = message.from_user.id
+    pid = state["product_id"]
+    
+    try:
+        val = int(text)
+        if val < 0:
+            raise ValueError
+    except ValueError:
+        bot.send_message(user_id, "❌ Please enter a valid non-negative integer.")
+        return
+        
+    update_product(pid, {"$set": {"numerical_stock": val}})
+    user_states.clear(user_id)
+    
+    bot.send_message(
+        user_id,
+        f"✅ Numerical stock updated to <b>{val}</b> successfully!",
+        parse_mode="HTML",
         reply_markup=admin_panel_kb()
     )
 

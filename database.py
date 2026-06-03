@@ -144,13 +144,15 @@ def delete_user(user_id: int) -> None:
 # ║  PRODUCT helpers                                                    ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def create_product(name: str, description: str, credit_cost: int) -> str:
+def create_product(name: str, description: str, credit_cost: int, is_numerical: bool = False, numerical_stock: int = 0) -> str:
     """Insert a product and return its _id as string."""
     doc = {
         "name": name,
         "description": description,
         "credit_cost": credit_cost,
         "active": True,
+        "is_numerical": is_numerical,
+        "numerical_stock": numerical_stock,
         "created_at": datetime.now(timezone.utc),
     }
     result = products_col.insert_one(doc)
@@ -232,8 +234,12 @@ def add_stock_items(product_id: str, links: list[str]) -> tuple[int, int]:
 
 
 def get_available_stock_count(product_id: str) -> int:
-    """Count unsold stock items for a product."""
+    """Count unsold stock items for a product, or return numerical stock if applicable."""
     from bson import ObjectId
+    product = products_col.find_one({"_id": ObjectId(product_id)})
+    if product and product.get("is_numerical"):
+        return product.get("numerical_stock", 0)
+
     return stock_col.count_documents({
         "product_id": ObjectId(product_id),
         "is_sold": False,

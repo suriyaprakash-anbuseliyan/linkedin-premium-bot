@@ -363,12 +363,20 @@ def register(bot: telebot.TeleBot):
         total = get_total_stock_count(pid)
         sold = total - available
 
+        is_num = product.get("is_numerical", False)
+        
+        if is_num:
+            num_stock = product.get("numerical_stock", 0)
+            stock_line = f"🔢 Stock: <b>{num_stock}</b> (Numerical Service)"
+        else:
+            stock_line = f"📦 Stock: <b>{available}</b> available / {sold} sold / {total} total"
+
         text = (
             f"📦 <b>{product['name']}</b>\n\n"
             f"{product['description']}\n\n"
             f"💎 Cost: {product['credit_cost']} credits\n"
             f"📌 Active: {'Yes' if product['active'] else 'No'}\n"
-            f"📦 Stock: <b>{available}</b> available / {sold} sold / {total} total\n"
+            f"{stock_line}\n"
             f"📅 Created: {format_datetime(product.get('created_at'))}"
         )
         bot.edit_message_text(
@@ -376,7 +384,7 @@ def register(bot: telebot.TeleBot):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=admin_product_actions_kb(pid, product["active"]),
+            reply_markup=admin_product_actions_kb(pid, product["active"], is_num),
         )
         bot.answer_callback_query(call.id)
 
@@ -406,6 +414,94 @@ def register(bot: telebot.TeleBot):
         bot.answer_callback_query(call.id, "🗑 Product & stock deleted.", show_alert=True)
         # Return to product list
         cb_manage_products(call)
+
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:toggle_numerical:"))
+    def cb_admin_toggle_numerical(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        pid = call.data.split(":")[2]
+        product = get_product(pid)
+        if not product:
+            bot.answer_callback_query(call.id, "Product not found.", show_alert=True)
+            return
+            
+        new_val = not product.get("is_numerical", False)
+        update_product(pid, {"$set": {"is_numerical": new_val}})
+        
+        bot.answer_callback_query(call.id, f"Switched to {'Numerical' if new_val else 'Links'}")
+        # Refresh the view
+        call.data = f"admprod:view:{pid}"
+        cb_admin_view_product(call)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:set_num_stock:"))
+    def cb_admin_set_num_stock(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        pid = call.data.split(":")[2]
+        product = get_product(pid)
+        if not product:
+            return
+            
+        user_states.set(call.from_user.id, {
+            "action": "admin_set_num_stock",
+            "product_id": pid,
+        })
+        bot.send_message(
+            call.from_user.id,
+            f"✏️ <b>Set Numerical Stock for:</b> {product['name']}\n\n"
+            "Please enter the new integer value for the available stock:",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb()
+        )
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:stock_type:"))
+    def cb_admin_stock_type(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        
+        stock_type = call.data.split(":")[2]  # 'links' or 'numerical'
+        state = user_states.get(call.from_user.id)
+        if not state or state.get("step") != "stock_type":
+            bot.answer_callback_query(call.id, "Invalid state. Please start over.", show_alert=True)
+            return
+
+        if stock_type == "links":
+            # Create product right away
+            product_id = create_product(
+                name=state["product_name"],
+                description=state["product_desc"],
+                credit_cost=state["product_cost"],
+                is_numerical=False,
+                numerical_stock=0,
+            )
+            user_states.clear(call.from_user.id)
+            logger.info("Product created (Links): %s (id=%s)", state["product_name"], product_id)
+            bot.edit_message_text(
+                f"✅ <b>Product Created!</b>\n\n"
+                f"Name: <b>{state['product_name']}</b>\n"
+                f"Cost: {state['product_cost']} credits\n"
+                f"Type: Links / Coupons\n"
+                f"ID: <code>{product_id}</code>\n\n"
+                "📦 Now go to <b>Manage Products</b> → select this product → "
+                "<b>Add Stock</b> to bulk-import your links.",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=admin_panel_kb(),
+            )
+        else:
+            # Numerical product -> ask for initial stock
+            user_states.update(call.from_user.id, step="numerical_stock", is_numerical=True)
+            bot.edit_message_text(
+                "Step 5/5 — Enter the initial <b>numerical stock</b> limit (integer):",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=admin_back_kb(),
+            )
+        bot.answer_callback_query(call.id)
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:edit_"))
     def cb_edit_product_field(call: telebot.types.CallbackQuery):
