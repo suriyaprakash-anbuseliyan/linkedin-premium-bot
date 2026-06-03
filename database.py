@@ -144,7 +144,7 @@ def delete_user(user_id: int) -> None:
 # ║  PRODUCT helpers                                                    ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def create_product(name: str, description: str, credit_cost: int, is_numerical: bool = False, numerical_stock: int = 0) -> str:
+def create_product(name: str, description: str, credit_cost: int, is_numerical: bool = False, numerical_stock: int = 0, requires_qr: bool = False) -> str:
     """Insert a product and return its _id as string."""
     doc = {
         "name": name,
@@ -153,6 +153,7 @@ def create_product(name: str, description: str, credit_cost: int, is_numerical: 
         "active": True,
         "is_numerical": is_numerical,
         "numerical_stock": numerical_stock,
+        "requires_qr": requires_qr,
         "created_at": datetime.now(timezone.utc),
     }
     result = products_col.insert_one(doc)

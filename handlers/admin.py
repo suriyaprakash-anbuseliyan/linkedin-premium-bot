@@ -384,7 +384,7 @@ def register(bot: telebot.TeleBot):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=admin_product_actions_kb(pid, product["active"], is_num),
+            reply_markup=admin_product_actions_kb(pid, product["active"], is_num, product.get("requires_qr", False)),
         )
         bot.answer_callback_query(call.id)
 
@@ -431,6 +431,23 @@ def register(bot: telebot.TeleBot):
         
         bot.answer_callback_query(call.id, f"Switched to {'Numerical' if new_val else 'Links'}")
         # Refresh the view
+        call.data = f"admprod:view:{pid}"
+        cb_admin_view_product(call)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:toggle_qr:"))
+    def cb_admin_toggle_qr(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        pid = call.data.split(":")[2]
+        product = get_product(pid)
+        if not product:
+            bot.answer_callback_query(call.id, "Product not found.", show_alert=True)
+            return
+            
+        new_val = not product.get("requires_qr", False)
+        update_product(pid, {"$set": {"requires_qr": new_val}})
+        
+        bot.answer_callback_query(call.id, f"QR Upload set to {'ON' if new_val else 'OFF'}")
         call.data = f"admprod:view:{pid}"
         cb_admin_view_product(call)
 

@@ -375,10 +375,11 @@ def admin_products_list_kb(products: list[dict]) -> InlineKeyboardMarkup:
     return kb
 
 
-def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: bool = False) -> InlineKeyboardMarkup:
+def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: bool = False, requires_qr: bool = False) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     toggle_label = "🔴 Disable" if is_active else "🟢 Enable"
     toggle_cb = f"admprod:toggle:{product_id}"
+    qr_label = "🔴 QR Upload: OFF" if not requires_qr else "🟢 QR Upload: ON"
     
     kb.add(
         InlineKeyboardButton("📝 Edit Name", callback_data=f"admprod:edit_name:{product_id}"),
@@ -403,6 +404,7 @@ def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: boo
         InlineKeyboardButton(toggle_label, callback_data=toggle_cb),
         InlineKeyboardButton("🗑 Delete", callback_data=f"admprod:delete:{product_id}"),
     )
+    kb.add(InlineKeyboardButton(qr_label, callback_data=f"admprod:toggle_qr:{product_id}"))
     kb.add(InlineKeyboardButton("🔙 Back", callback_data="adm:manage_products"))
     return kb
 

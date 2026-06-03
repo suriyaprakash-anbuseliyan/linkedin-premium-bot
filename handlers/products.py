@@ -207,14 +207,23 @@ def register(bot: telebot.TeleBot):
             lbl = "service(s)" if is_num else "link(s)"
             announce_event(bot, "PRODUCT PURCHASED", call.from_user.id, u["credits"], f"Purchased {actual_qty} {lbl}")
 
-        # Create QR order for this purchase
-        qr_order_id = create_qr_order(
-            user_id=call.from_user.id,
-            product_name=product["name"],
-            credits_used=actual_cost,
-            items=items_list,
-            order_id=order_id,
-        )
+        requires_qr = product.get("requires_qr", False)
+
+        # Create QR order for this purchase if required
+        if requires_qr:
+            qr_order_id = create_qr_order(
+                user_id=call.from_user.id,
+                product_name=product["name"],
+                credits_used=actual_cost,
+                items=items_list,
+                order_id=order_id,
+            )
+            qr_text = "📲 <b>Upload your UPI QR code</b> to complete the payment process.\n"
+            reply_markup = purchase_success_qr_kb(qr_order_id)
+        else:
+            qr_text = ""
+            from keyboards.inline import back_to_menu_kb
+            reply_markup = back_to_menu_kb()
 
         if is_num:
             links_block = ""
@@ -230,7 +239,7 @@ def register(bot: telebot.TeleBot):
             "✅ <b>Purchase Successful!</b>\n\n"
             f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
             f"{links_block}"
-            "📲 <b>Upload your UPI QR code</b> to complete the payment process.\n"
+            f"{qr_text}"
             "Thank you for your purchase! 🎉"
         )
         bot.edit_message_text(
@@ -238,7 +247,7 @@ def register(bot: telebot.TeleBot):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=purchase_success_qr_kb(qr_order_id),
+            reply_markup=reply_markup,
         )
         bot.answer_callback_query(call.id, "✅ Purchase complete!")
 
