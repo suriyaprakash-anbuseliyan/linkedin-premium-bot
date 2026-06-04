@@ -262,6 +262,19 @@ def register(bot: telebot.TeleBot):
 
         if is_num:
             links_block = ""
+            text = (
+                "✅ <b>Purchase Successful!</b>\n\n"
+                f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
+                f"{qr_text}"
+                "Thank you for your purchase! 🎉"
+            )
+            bot.edit_message_text(
+                text,
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
         else:
             links_text = "\n\n".join(
                 f"🔗 {item['content']}\n"
@@ -270,20 +283,54 @@ def register(bot: telebot.TeleBot):
             )
             links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n⚠️ <i>Use these links within 7 days before they expire.</i>\n\n"
 
-        text = (
-            "✅ <b>Purchase Successful!</b>\n\n"
-            f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
-            f"{links_block}"
-            f"{qr_text}"
-            "Thank you for your purchase! 🎉"
-        )
-        bot.edit_message_text(
-            text,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            parse_mode="HTML",
-            reply_markup=reply_markup,
-        )
+            text = (
+                "✅ <b>Purchase Successful!</b>\n\n"
+                f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
+                f"{links_block}"
+                f"{qr_text}"
+                "Thank you for your purchase! 🎉"
+            )
+            
+            if len(text) > 4000:
+                brief_text = (
+                    "✅ <b>Purchase Successful!</b>\n\n"
+                    f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
+                    f"{qr_text}"
+                    "Thank you for your purchase! 🎉\n\n"
+                    "<i>Your links are provided in the attached file below because there are too many to show here.</i>"
+                )
+                bot.edit_message_text(
+                    brief_text,
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup,
+                )
+                import io
+                
+                # Format links for the text file
+                file_content = f"Purchase: {product['name']} (x{actual_qty})\n\n"
+                for item in claimed_items:
+                    exp = item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'
+                    file_content += f"Link: {item['content']}\nExpires: {exp}\n\n"
+                    
+                doc = io.BytesIO(file_content.encode('utf-8'))
+                doc.name = f"Order_{order_id}_links.txt"
+                bot.send_document(
+                    call.message.chat.id, 
+                    document=doc, 
+                    caption="⚠️ <i>Use these links within 7 days before they expire.</i>", 
+                    parse_mode="HTML"
+                )
+            else:
+                bot.edit_message_text(
+                    text,
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup,
+                )
+
         bot.answer_callback_query(call.id, "✅ Purchase complete!")
 
     # ── QR Upload prompt ───────────────────────────────────────────────
