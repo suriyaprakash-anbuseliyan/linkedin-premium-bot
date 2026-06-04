@@ -45,6 +45,7 @@ def register(bot: telebot.TeleBot):
             return
 
         lines = ["📜 <b>Your Orders</b>\n"]
+        buttons = []
         for i, order in enumerate(orders[:20], 1):  # show last 20
             items = order.get("items", [])
             if not items:
@@ -66,13 +67,63 @@ def register(bot: telebot.TeleBot):
                 
             lines.append(order_text)
             
+            # If the order has items, provide a download button
+            if items:
+                order_id = str(order['_id'])
+                buttons.append(telebot.types.InlineKeyboardButton(f"📥 Download #{i}", callback_data=f"order:download:{order_id}"))
+            
         text = "\n".join(lines)
+        
+        kb = telebot.types.InlineKeyboardMarkup(row_width=2)
+        if buttons:
+            kb.add(*buttons)
+        kb.add(telebot.types.InlineKeyboardButton("🔙 Back to Menu", callback_data="menu:main"))
 
         bot.edit_message_text(
             text,
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=back_to_menu_kb(),
+            reply_markup=kb,
+        )
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("order:download:"))
+    def cb_order_download(call: telebot.types.CallbackQuery):
+        order_id = call.data.split(":")[2]
+        from database import orders_col
+        from bson import ObjectId
+        
+        try:
+            order = orders_col.find_one({"_id": ObjectId(order_id)})
+        except Exception:
+            order = None
+            
+        if not order:
+            bot.answer_callback_query(call.id, "Order not found.", show_alert=True)
+            return
+            
+        if order.get("user_id") != call.from_user.id:
+            bot.answer_callback_query(call.id, "Not authorized.", show_alert=True)
+            return
+            
+        items = order.get("items", [])
+        if not items:
+            bot.answer_callback_query(call.id, "No links found for this order.", show_alert=True)
+            return
+            
+        import io
+        file_content = f"Order: {order.get('product_name', 'Unknown')}\n\n"
+        for item in items:
+            file_content += f"Link: {item}\n\n"
+            
+        doc = io.BytesIO(file_content.encode('utf-8'))
+        doc.name = f"Order_links.txt"
+        
+        bot.send_document(
+            call.message.chat.id, 
+            document=doc, 
+            caption=f"📦 Here are your links for <b>{order.get('product_name')}</b>",
+            parse_mode="HTML"
         )
         bot.answer_callback_query(call.id)
