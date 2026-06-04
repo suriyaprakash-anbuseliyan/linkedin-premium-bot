@@ -86,11 +86,13 @@ def register(bot: telebot.TeleBot):
             )
             from database import is_welcome_bonus_enabled
             if is_welcome_bonus_enabled():
-                bot.send_message(
+                msg = bot.send_message(
                     chat_id,
                     "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free credits in the Referral menu!",
                     parse_mode="HTML"
                 )
+                from database import schedule_message_cleanup
+                schedule_message_cleanup(chat_id, msg.message_id, hours=24)
             logger.info("New user registered: %s (%s)", user_id, username)
             from utils.helpers import announce_event
             announce_event(bot, "NEW USER JOINED", user_id, 0, "Registered")
@@ -148,11 +150,13 @@ def register(bot: telebot.TeleBot):
             
             from database import is_welcome_bonus_enabled
             if is_welcome_bonus_enabled():
-                bot.send_message(
+                msg = bot.send_message(
                     user_id,
                     "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free credits in the Referral menu!",
                     parse_mode="HTML"
                 )
+                from database import schedule_message_cleanup
+                schedule_message_cleanup(user_id, msg.message_id, hours=24)
 
         bot.edit_message_text(
             WELCOME_TEXT,
@@ -167,12 +171,14 @@ def register(bot: telebot.TeleBot):
 def _maybe_award_referral(bot: telebot.TeleBot, referrer: dict) -> None:
     """Notify the referrer that someone used their link."""
     try:
-        bot.send_message(
+        msg = bot.send_message(
             referrer["user_id"],
             "🎉 <b>Someone just joined using your referral link!</b>\n\n"
             "You earned <b>1 referral point</b>. Go to the <b>Referral</b> menu "
             "to convert your points into free credits! 🚀",
             parse_mode="HTML",
         )
+        from database import schedule_message_cleanup
+        schedule_message_cleanup(referrer["user_id"], msg.message_id, hours=24)
     except Exception:
         pass  # user may have blocked the bot

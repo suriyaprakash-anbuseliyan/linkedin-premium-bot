@@ -101,6 +101,25 @@ def main():
     import threading
     threading.Thread(target=broadcast_online, daemon=True).start()
 
+    # ── Background Cleanup Worker ────────────────────────────────────
+    def cleanup_worker():
+        from database import get_expired_cleanup_tasks, remove_cleanup_task
+        import time
+        while True:
+            try:
+                tasks = get_expired_cleanup_tasks()
+                for task in tasks:
+                    try:
+                        bot.delete_message(task["chat_id"], task["message_id"])
+                    except Exception:
+                        pass
+                    remove_cleanup_task(str(task["_id"]))
+            except Exception as exc:
+                logger.error("Cleanup worker error: %s", exc)
+            time.sleep(300) # Check every 5 minutes
+
+    threading.Thread(target=cleanup_worker, daemon=True).start()
+
     # ── Start polling ────────────────────────────────────────────────
     logger.info("Bot is now polling for updates…")
     bot.infinity_polling(

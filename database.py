@@ -707,3 +707,36 @@ def refund_stock(product_id: str, qty: int, is_numerical: bool, items: list[str]
             {"product_id": pid, "content": {"$in": items}},
             {"$set": {"is_sold": False, "sold_to": None, "sold_at": None}}
         )
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  CLEANUP helpers                                                    ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+cleanup_tasks_col = db["cleanup_tasks"]
+
+def ensure_cleanup_indexes() -> None:
+    cleanup_tasks_col.create_index([("delete_at", ASCENDING)])
+
+# Call this to ensure the index exists
+ensure_cleanup_indexes()
+
+def schedule_message_cleanup(chat_id: int, message_id: int, hours: int = 24) -> None:
+    """Schedule a message to be deleted after a certain number of hours."""
+    from datetime import timedelta
+    delete_at = datetime.now(timezone.utc) + timedelta(hours=hours)
+    doc = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "delete_at": delete_at
+    }
+    cleanup_tasks_col.insert_one(doc)
+
+def get_expired_cleanup_tasks() -> list[dict]:
+    """Retrieve messages that are scheduled to be deleted and have expired."""
+    now = datetime.now(timezone.utc)
+    return list(cleanup_tasks_col.find({"delete_at": {"$lte": now}}))
+
+def remove_cleanup_task(task_id: str) -> None:
+    """Remove a cleanup task from the database after it has been processed."""
+    from bson import ObjectId
+    cleanup_tasks_col.delete_one({"_id": ObjectId(task_id)})

@@ -47,7 +47,9 @@ def _run_broadcast_new_stock(bot: telebot.TeleBot, product_name: str, added_coun
     all_ids = get_all_user_ids()
     for uid in all_ids:
         try:
-            bot.send_message(uid, msg_text, parse_mode="HTML")
+            msg = bot.send_message(uid, msg_text, parse_mode="HTML")
+            from database import schedule_message_cleanup
+            schedule_message_cleanup(uid, msg.message_id, hours=24)
         except Exception:
             pass
         time.sleep(0.05)
@@ -62,6 +64,10 @@ def register(bot: telebot.TeleBot):
     @bot.message_handler(func=lambda m: user_states.has(m.from_user.id))
     def handle_state_input(message: telebot.types.Message):
         user_id = message.from_user.id
+        try:
+            bot.delete_message(message.chat.id, message.message_id)
+        except Exception:
+            pass
         state = user_states.get(user_id)
         if not state:
             return
@@ -975,21 +981,25 @@ def _handle_redeem_gift_code(bot: telebot.TeleBot, message: telebot.types.Messag
     result = redeem_gift_code(code, user_id)
     
     if result is True:
-        bot.send_message(
+        msg = bot.send_message(
             user_id,
             "🎉 <b>Success!</b>\n\nYour gift code has been redeemed and points have been added to your account.",
             parse_mode="HTML",
             reply_markup=back_to_menu_kb()
         )
+        from database import schedule_message_cleanup
+        schedule_message_cleanup(user_id, msg.message_id, hours=24)
         from utils.helpers import announce_event
         announce_event(bot, "GIFT CODE REDEEMED", user_id, 0, "Redeemed")
     else:
-        bot.send_message(
+        msg = bot.send_message(
             user_id,
             f"❌ <b>Error:</b> {result}",
             parse_mode="HTML",
             reply_markup=back_to_menu_kb()
         )
+        from database import schedule_message_cleanup
+        schedule_message_cleanup(user_id, msg.message_id, hours=24)
     user_states.clear(user_id)
 
 
@@ -1200,7 +1210,9 @@ def _handle_broadcast(
     success, failed = 0, 0
     for uid in all_ids:
         try:
-            bot.send_message(uid, text, parse_mode="HTML")
+            msg = bot.send_message(uid, text, parse_mode="HTML")
+            from database import schedule_message_cleanup
+            schedule_message_cleanup(uid, msg.message_id, hours=24)
             success += 1
         except Exception:
             failed += 1
@@ -1437,7 +1449,9 @@ def _handle_admin_send_msg(
     msg_text = f"📨 <b>Message from owner:</b>\n\n{text}"
     
     try:
-        bot.send_message(target_id, msg_text, parse_mode="HTML")
+        msg = bot.send_message(target_id, msg_text, parse_mode="HTML")
+        from database import schedule_message_cleanup
+        schedule_message_cleanup(target_id, msg.message_id, hours=24)
         bot.send_message(
             user_id,
             f"✅ Message sent to user <code>{target_id}</code>.",
