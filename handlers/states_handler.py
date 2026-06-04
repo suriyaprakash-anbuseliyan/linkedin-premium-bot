@@ -143,6 +143,11 @@ def register(bot: telebot.TeleBot):
             _handle_buy_quantity(bot, message, state, text)
             return
 
+        # ── USER: Download Order ─────────────────────────────────────
+        if action == "download_order":
+            _handle_download_order(bot, message, state, text)
+            return
+
         # ── ADMIN: Edit Product ──────────────────────────────────────
         if action == "admin_edit_product" and is_admin(user_id):
             _handle_admin_edit_product(bot, message, state, text, html_text)
@@ -1481,3 +1486,55 @@ def _handle_admin_ui_input(
         parse_mode="HTML",
         reply_markup=admin_ui_edit_kb(button_key)
     )
+
+def _handle_download_order(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    state: dict,
+    text: str,
+):
+    user_id = message.from_user.id
+    order_id = text.strip()
+    
+    from database import orders_col
+    from bson import ObjectId
+    
+    try:
+        order = orders_col.find_one({"_id": ObjectId(order_id)})
+    except Exception:
+        order = None
+        
+    from keyboards.inline import back_to_menu_kb
+    
+    if not order:
+        bot.send_message(user_id, "❌ <b>Order not found.</b>\nPlease check your Order ID and try again.", parse_mode="HTML", reply_markup=back_to_menu_kb())
+        user_states.clear(user_id)
+        return
+        
+    if order.get("user_id") != user_id:
+        bot.send_message(user_id, "⛔ <b>Not authorized.</b>\nThis order belongs to someone else.", parse_mode="HTML", reply_markup=back_to_menu_kb())
+        user_states.clear(user_id)
+        return
+        
+    items = order.get("items", [])
+    if not items:
+        bot.send_message(user_id, "❌ No links found for this order.", reply_markup=back_to_menu_kb())
+        user_states.clear(user_id)
+        return
+        
+    import io
+    file_content = f"Order: {order.get('product_name', 'Unknown')}\n\n"
+    for item in items:
+        file_content += f"Link: {item}\n\n"
+        
+    doc = io.BytesIO(file_content.encode('utf-8'))
+    doc.name = f"Order_{order_id}_links.txt"
+    
+    bot.send_document(
+        user_id, 
+        document=doc, 
+        caption=f"📦 Here are your links for <b>{order.get('product_name')}</b>",
+        parse_mode="HTML",
+        reply_markup=back_to_menu_kb()
+    )
+    user_states.clear(user_id)

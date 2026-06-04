@@ -45,20 +45,14 @@ def register(bot: telebot.TeleBot):
             return
 
         lines = ["📜 <b>Your Orders</b>\n"]
-        buttons = []
         for i, order in enumerate(orders[:20], 1):  # show last 20
-            items = order.get("items", [])
-            if not items:
-                items_str = ""
-            elif len(items) <= 2:
-                items_str = "".join([f"\n   🔗 <code>{item}</code>" for item in items])
-            else:
-                items_str = f"\n   🔗 <code>{items[0]}</code>\n   🔗 <code>{items[1]}</code>\n   <i>... and {len(items) - 2} more item(s)</i>"
+            order_id = str(order['_id'])
             
             order_text = (
                 f"{i}. <b>{order['product_name']}</b>\n"
                 f"   💎 Credits: {order['credits_used']}  •  "
-                f"📅 {format_datetime(order.get('created_at'))}{items_str}\n"
+                f"📅 {format_datetime(order.get('created_at'))}\n"
+                f"   🆔 Order ID: <code>{order_id}</code>\n"
             )
             
             if len("\n".join(lines)) + len(order_text) > 3900:
@@ -67,16 +61,10 @@ def register(bot: telebot.TeleBot):
                 
             lines.append(order_text)
             
-            # If the order has items, provide a download button
-            if items:
-                order_id = str(order['_id'])
-                buttons.append(telebot.types.InlineKeyboardButton(f"📥 Download #{i}", callback_data=f"order:download:{order_id}"))
-            
         text = "\n".join(lines)
         
-        kb = telebot.types.InlineKeyboardMarkup(row_width=2)
-        if buttons:
-            kb.add(*buttons)
+        kb = telebot.types.InlineKeyboardMarkup(row_width=1)
+        kb.add(telebot.types.InlineKeyboardButton("📥 Download Order", callback_data="order:prompt_download"))
         kb.add(telebot.types.InlineKeyboardButton("🔙 Back to Menu", callback_data="menu:main"))
 
         bot.edit_message_text(
@@ -88,42 +76,19 @@ def register(bot: telebot.TeleBot):
         )
         bot.answer_callback_query(call.id)
 
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("order:download:"))
-    def cb_order_download(call: telebot.types.CallbackQuery):
-        order_id = call.data.split(":")[2]
-        from database import orders_col
-        from bson import ObjectId
+    @bot.callback_query_handler(func=lambda c: c.data == "order:prompt_download")
+    def cb_order_prompt(call: telebot.types.CallbackQuery):
+        from utils.states import user_states
+        user_states.set(call.from_user.id, {"action": "download_order"})
         
-        try:
-            order = orders_col.find_one({"_id": ObjectId(order_id)})
-        except Exception:
-            order = None
-            
-        if not order:
-            bot.answer_callback_query(call.id, "Order not found.", show_alert=True)
-            return
-            
-        if order.get("user_id") != call.from_user.id:
-            bot.answer_callback_query(call.id, "Not authorized.", show_alert=True)
-            return
-            
-        items = order.get("items", [])
-        if not items:
-            bot.answer_callback_query(call.id, "No links found for this order.", show_alert=True)
-            return
-            
-        import io
-        file_content = f"Order: {order.get('product_name', 'Unknown')}\n\n"
-        for item in items:
-            file_content += f"Link: {item}\n\n"
-            
-        doc = io.BytesIO(file_content.encode('utf-8'))
-        doc.name = f"Order_links.txt"
-        
-        bot.send_document(
-            call.message.chat.id, 
-            document=doc, 
-            caption=f"📦 Here are your links for <b>{order.get('product_name')}</b>",
-            parse_mode="HTML"
+        bot.edit_message_text(
+            "📥 <b>Download Order</b>\n\n"
+            "Please copy and paste the <b>Order ID</b> of the order you wish to download:",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=telebot.types.InlineKeyboardMarkup().add(
+                telebot.types.InlineKeyboardButton("❌ Cancel", callback_data="menu:orders")
+            )
         )
         bot.answer_callback_query(call.id)
