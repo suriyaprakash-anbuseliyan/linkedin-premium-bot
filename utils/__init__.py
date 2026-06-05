@@ -9,7 +9,8 @@ from utils.helpers import (
     is_admin,
     check_membership,
     format_datetime,
-    validate_linkedin_link,
+    validate_link,
+    extract_all_links,
 )
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "is_admin",
     "check_membership",
     "format_datetime",
-    "validate_linkedin_link",
+    "validate_link",
+    "extract_all_links",
 ]
