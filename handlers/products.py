@@ -231,8 +231,7 @@ def register(bot: telebot.TeleBot):
         u = get_user(call.from_user.id)
         if u:
             from utils.helpers import announce_event
-            lbl = "service(s)" if is_num else "link(s)"
-            announce_event(bot, "PRODUCT PURCHASED", call.from_user.id, u["credits"], f"Purchased {actual_qty} {lbl}")
+            announce_event(bot, "PRODUCT PURCHASED", call.from_user.id, u["credits"], f"{product['name']} {actual_qty} purchased")
 
         requires_qr = product.get("requires_qr", False)
 
