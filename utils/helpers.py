@@ -130,32 +130,6 @@ def get_payment_settings() -> dict:
     }
 
 
-def get_credit_packages() -> dict[int, dict]:
-    """
-    Get current credit packages pricing. DB values override config.py defaults.
-    """
-    from database import get_setting
-    from config import CREDIT_PACKAGES as default_packages
-
-    packages = {}
-    for qty, defaults in default_packages.items():
-        inr_val = get_setting(f"pkg_{qty}_inr", "")
-        usdt_val = get_setting(f"pkg_{qty}_usdt", "")
-
-        try:
-            inr = float(inr_val) if inr_val else defaults["inr"]
-            inr = int(inr) if inr == int(inr) else inr
-        except ValueError:
-            inr = defaults["inr"]
-
-        try:
-            usdt = float(usdt_val) if usdt_val else defaults["usdt"]
-        except ValueError:
-            usdt = defaults["usdt"]
-
-        packages[qty] = {"inr": inr, "usdt": usdt}
-    return packages
-
 
 def get_referral_settings() -> dict:
     """

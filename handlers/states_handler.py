@@ -86,6 +86,11 @@ def register(bot: telebot.TeleBot):
             _handle_payment_submission(bot, message, state, binance_order_id=text)
             return
 
+        # ── CREDIT PURCHASE: Enter Amount ────────────────────────────
+        if action == "awaiting_credit_amount":
+            _handle_credit_amount_input(bot, message, text)
+            return
+
         # ── REDEEM GIFT CODE ─────────────────────────────────────────
         if action == "awaiting_gift_code":
             _handle_redeem_gift_code(bot, message, text)

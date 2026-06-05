@@ -59,16 +59,16 @@ BOT_USERNAME: str = os.getenv("BOT_USERNAME", "linkedinpremiumstore_bot")
 
 # ── Credit packages  (credits → price in INR for UPI / USDT for Binance) ─
 CREDIT_PACKAGES: dict[int, dict] = {
-    2:  {"inr": 100,  "usdt": 1.0},
-    4:  {"inr": 200,  "usdt": 2.0},
-    6:  {"inr": 300,  "usdt": 3.0},
-    8:  {"inr": 400,  "usdt": 4.0},
-    10: {"inr": 500,  "usdt": 5.0},
-    12: {"inr": 600,  "usdt": 6.0},
-    14: {"inr": 700,  "usdt": 7.0},
-    16: {"inr": 800,  "usdt": 8.0},
-    18: {"inr": 900,  "usdt": 9.0},
-    20: {"inr": 1000, "usdt": 10.0},
+    2:  {"inr": 106,  "usdt": 1.0},
+    4:  {"inr": 212,  "usdt": 2.0},
+    6:  {"inr": 318,  "usdt": 3.0},
+    8:  {"inr": 424,  "usdt": 4.0},
+    10: {"inr": 530,  "usdt": 5.0},
+    12: {"inr": 636,  "usdt": 6.0},
+    14: {"inr": 742,  "usdt": 7.0},
+    16: {"inr": 848,  "usdt": 8.0},
+    18: {"inr": 954,  "usdt": 9.0},
+    20: {"inr": 1060, "usdt": 10.0},
 }
 
 # ── Referral settings ───────────────────────────────────────────────────

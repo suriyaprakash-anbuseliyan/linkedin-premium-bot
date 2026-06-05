@@ -8,10 +8,10 @@ import telebot
 from config import ADMIN_ID, logger
 from database import create_payment, get_user
 from keyboards.inline import (
-    credit_packages_kb, payment_method_kb, cancel_payment_kb,
+    payment_method_kb, cancel_payment_kb,
     admin_payment_review_kb, join_channel_kb,
 )
-from utils.helpers import check_membership, get_payment_settings, get_credit_packages
+from utils.helpers import check_membership, get_payment_settings
 from utils.states import user_states
 
 
@@ -37,46 +37,24 @@ def _gate(bot, call):
 
 def register(bot: telebot.TeleBot):
 
-    # ── Show credit packages ─────────────────────────────────────────
+    # ── Show credit input prompt ─────────────────────────────────────
     @bot.callback_query_handler(func=lambda c: c.data == "menu:credits")
     def cb_add_credits(call: telebot.types.CallbackQuery):
         if not _gate(bot, call):
             return
-        # Clear any ongoing state
-        user_states.clear(call.from_user.id)
+        
+        user_states.set(call.from_user.id, {"action": "awaiting_credit_amount"})
 
         bot.edit_message_text(
-            "💰 <b>Add Credits</b>\n\n"
-            "Select a credit package:",
+            "💳 <b>Add Credits</b>\n\n"
+            "Please enter the number of credits you want to purchase.\n\n"
+            "<i>Pricing Rules:</i>\n"
+            "• 2 Credits = ₹106 / $1\n"
+            "• Minimum purchase: 2 credits",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=credit_packages_kb(),
-        )
-        bot.answer_callback_query(call.id)
-
-    # ── Choose payment method ────────────────────────────────────────
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("cred:pkg:"))
-    def cb_select_package(call: telebot.types.CallbackQuery):
-        credits_qty = int(call.data.split(":")[2])
-        packages = get_credit_packages()
-        if credits_qty not in packages:
-            bot.answer_callback_query(call.id, "Invalid package.", show_alert=True)
-            return
-
-        pkg = packages[credits_qty]
-        text = (
-            f"💎 <b>{credits_qty} Credit{'s' if credits_qty > 1 else ''}</b>\n\n"
-            f"💳 UPI Price: <b>₹{pkg['inr']}</b>\n"
-            f"🪙 Binance Price: <b>${pkg['usdt']} USDT</b>\n\n"
-            "Choose your payment method:"
-        )
-        bot.edit_message_text(
-            text,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            parse_mode="HTML",
-            reply_markup=payment_method_kb(credits_qty),
+            reply_markup=cancel_payment_kb(),
         )
         bot.answer_callback_query(call.id)
 
@@ -84,11 +62,7 @@ def register(bot: telebot.TeleBot):
     @bot.callback_query_handler(func=lambda c: c.data.startswith("pay:upi:"))
     def cb_pay_upi(call: telebot.types.CallbackQuery):
         credits_qty = int(call.data.split(":")[2])
-        packages = get_credit_packages()
-        pkg = packages.get(credits_qty)
-        if not pkg:
-            bot.answer_callback_query(call.id, "Invalid package.", show_alert=True)
-            return
+        inr_price = credits_qty * 53
 
         from utils.payments import create_razorpay_payment_link
         import time
@@ -96,7 +70,7 @@ def register(bot: telebot.TeleBot):
         
         bot.answer_callback_query(call.id, "Generating Payment Link...")
         
-        link_data = create_razorpay_payment_link(pkg["inr"], ref_id, f"Buy {credits_qty} credits")
+        link_data = create_razorpay_payment_link(inr_price, ref_id, f"Buy {credits_qty} credits")
         if not link_data:
             bot.edit_message_text(
                 "❌ Failed to generate payment link. Please try again later or contact support.",
@@ -109,7 +83,7 @@ def register(bot: telebot.TeleBot):
         user_states.set(call.from_user.id, {
             "action": "verify_razorpay",
             "credits": credits_qty,
-            "amount": pkg["inr"],
+            "amount": inr_price,
             "method": "UPI",
             "payment_link_id": link_data["id"]
         })
@@ -123,7 +97,7 @@ def register(bot: telebot.TeleBot):
 
         text = (
             "💳 <b>UPI Payment</b>\n\n"
-            f"Amount: <b>₹{pkg['inr']}</b>\n"
+            f"Amount: <b>₹{inr_price}</b>\n"
             f"Credits: <b>{credits_qty}</b>\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             "Click <b>Pay Now</b> to complete the payment via Razorpay.\n"
@@ -141,11 +115,7 @@ def register(bot: telebot.TeleBot):
     @bot.callback_query_handler(func=lambda c: c.data.startswith("pay:binance:"))
     def cb_pay_binance(call: telebot.types.CallbackQuery):
         credits_qty = int(call.data.split(":")[2])
-        packages = get_credit_packages()
-        pkg = packages.get(credits_qty)
-        if not pkg:
-            bot.answer_callback_query(call.id, "Invalid package.", show_alert=True)
-            return
+        usdt_price = credits_qty * 0.5
 
         import time
         import random
@@ -155,7 +125,7 @@ def register(bot: telebot.TeleBot):
         user_states.set(call.from_user.id, {
             "action": "awaiting_binance_id",
             "credits": credits_qty,
-            "amount": pkg["usdt"],
+            "amount": usdt_price,
             "method": "Binance",
             "expected_note": expected_note,
         })
@@ -163,7 +133,7 @@ def register(bot: telebot.TeleBot):
         ps = get_payment_settings()
         text = (
             "🪙 <b>Binance Payment</b>\n\n"
-            f"Amount: <b>${pkg['usdt']} USDT</b>\n"
+            f"Amount: <b>${usdt_price} USDT</b>\n"
             f"Credits: <b>{credits_qty}</b>\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             f"<b>Binance UID:</b> <code>{ps['binance_uid']}</code>\n"

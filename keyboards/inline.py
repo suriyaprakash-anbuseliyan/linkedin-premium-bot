@@ -8,7 +8,7 @@ Callback data uses a simple prefix convention:
 
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 from config import REQUIRED_CHANNEL_LINK
-from utils.helpers import get_credit_packages, btn_config
+from utils.helpers import btn_config
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
@@ -132,30 +132,23 @@ def admin_qr_review_kb(qr_order_id: str) -> InlineKeyboardMarkup:
 # ║  CREDIT PACKAGES                                                    ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def credit_packages_kb() -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup(row_width=2)
-    packages = get_credit_packages()
-    
-    buttons = []
-    for credits_qty in sorted(packages):
-        pkg = packages[credits_qty]
-        buttons.append(InlineKeyboardButton(
-            f"💎 {credits_qty} (₹{pkg['inr']}/ ${pkg['usdt']})",
-            callback_data=f"cred:pkg:{credits_qty}",
-        ))
-    kb.add(*buttons)
-    
-    kb.add(InlineKeyboardButton("📞 More than 20 credits? Contact Admin", callback_data="menu:support"))
-    kb.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="menu:main"))
-    return kb
+
 
 
 def payment_method_kb(credits_qty: int) -> InlineKeyboardMarkup:
+    from database import get_payment_settings
+    settings = get_payment_settings()
+    
     kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton("💳 UPI", callback_data=f"pay:upi:{credits_qty}"),
-        InlineKeyboardButton("🪙 Binance", callback_data=f"pay:binance:{credits_qty}"),
-    )
+    buttons = []
+    if settings.get("upi_enabled", True):
+        buttons.append(InlineKeyboardButton("💳 UPI", callback_data=f"pay:upi:{credits_qty}"))
+    if settings.get("binance_enabled", True):
+        buttons.append(InlineKeyboardButton("🪙 Binance", callback_data=f"pay:binance:{credits_qty}"))
+    
+    if buttons:
+        kb.add(*buttons)
+        
     kb.add(InlineKeyboardButton("🔙 Back", callback_data="menu:credits"))
     return kb
 
@@ -225,12 +218,22 @@ def admin_panel_kb(is_maintenance: bool = False, is_referral: bool = True) -> In
 
 
 def payment_settings_kb() -> InlineKeyboardMarkup:
+    from database import get_payment_settings
+    settings = get_payment_settings()
+    
     kb = InlineKeyboardMarkup(row_width=1)
+    
+    upi_status = "🟢 ON" if settings.get("upi_enabled", True) else "🔴 OFF"
+    binance_status = "🟢 ON" if settings.get("binance_enabled", True) else "🔴 OFF"
+    
+    kb.add(
+        InlineKeyboardButton(f"💳 UPI: {upi_status}", callback_data="admset:toggle_upi"),
+        InlineKeyboardButton(f"🪙 Binance: {binance_status}", callback_data="admset:toggle_binance")
+    )
     kb.add(
         InlineKeyboardButton("💳 Edit UPI ID", callback_data="admset:upi_id"),
         InlineKeyboardButton("👤 Edit UPI Name", callback_data="admset:upi_name"),
         InlineKeyboardButton("🪙 Edit Binance UID", callback_data="admset:binance_uid"),
-        InlineKeyboardButton("🏷 Edit Package Prices", callback_data="adm:prices_settings"),
     )
     kb.add(InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"))
     return kb
@@ -312,15 +315,7 @@ def admin_ui_style_kb(button_key: str) -> InlineKeyboardMarkup:
     return kb
 
 
-def prices_settings_kb(packages: dict) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup(row_width=1)
-    for qty in sorted(packages):
-        kb.add(
-            InlineKeyboardButton(f"✏️ {qty} Credit(s) - UPI (₹)", callback_data=f"admset:pkg_{qty}_inr"),
-            InlineKeyboardButton(f"✏️ {qty} Credit(s) - Binance ($)", callback_data=f"admset:pkg_{qty}_usdt"),
-        )
-    kb.add(InlineKeyboardButton("🔙 Back to Settings", callback_data="adm:payment_settings"))
-    return kb
+
 
 
 def referral_settings_kb(ref_config: dict, is_conversion_on: bool = True, is_welcome_bonus_on: bool = True) -> InlineKeyboardMarkup:

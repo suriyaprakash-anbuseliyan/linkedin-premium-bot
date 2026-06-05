@@ -22,10 +22,10 @@ from database import (
 from keyboards.inline import (
     admin_panel_kb, admin_back_kb,
     admin_products_list_kb, admin_product_actions_kb,
-    admin_payment_review_kb, payment_settings_kb, prices_settings_kb,
+    admin_payment_review_kb, payment_settings_kb,
     referral_settings_kb,
 )
-from utils.helpers import is_admin, format_datetime, get_payment_settings, get_credit_packages
+from utils.helpers import is_admin, format_datetime, get_payment_settings
 from utils.states import user_states
 
 
@@ -1028,11 +1028,13 @@ def register(bot: telebot.TeleBot):
         if not _admin_only(call):
             return
         ps = get_payment_settings()
+        upi_status = "🟢 ON" if ps.get("upi_enabled", True) else "🔴 OFF"
+        binance_status = "🟢 ON" if ps.get("binance_enabled", True) else "🔴 OFF"
         text = (
             "⚙️ <b>Payment Settings</b>\n\n"
-            f"💳 <b>UPI ID:</b> <code>{ps['upi_id']}</code>\n"
-            f"👤 <b>UPI Name:</b> {ps['upi_name']}\n"
-            f"🪙 <b>Binance UID:</b> <code>{ps['binance_uid']}</code>\n\n"
+            f"💳 <b>UPI ID:</b> <code>{ps.get('upi_id', 'N/A')}</code> ({upi_status})\n"
+            f"👤 <b>UPI Name:</b> {ps.get('upi_name', 'N/A')}\n"
+            f"🪙 <b>Binance UID:</b> <code>{ps.get('binance_uid', 'N/A')}</code> ({binance_status})\n\n"
             "Tap a button below to edit:"
         )
         bot.edit_message_text(
@@ -1044,23 +1046,37 @@ def register(bot: telebot.TeleBot):
         )
         bot.answer_callback_query(call.id)
 
-    @bot.callback_query_handler(func=lambda c: c.data == "adm:prices_settings")
-    def cb_prices_settings(call: telebot.types.CallbackQuery):
+    @bot.callback_query_handler(func=lambda c: c.data == "admset:toggle_upi")
+    def cb_toggle_upi(call: telebot.types.CallbackQuery):
         if not _admin_only(call):
             return
-        packages = get_credit_packages()
-        text = (
-            "🏷 <b>Edit Package Prices</b>\n\n"
-            "Select a package and currency to edit its price:"
+        ps = get_payment_settings()
+        new_val = not ps.get("upi_enabled", True)
+        from database import settings_col
+        settings_col.update_one(
+            {"_id": "payment_settings"},
+            {"$set": {"upi_enabled": new_val}},
+            upsert=True
         )
-        bot.edit_message_text(
-            text,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            parse_mode="HTML",
-            reply_markup=prices_settings_kb(packages),
+        bot.answer_callback_query(call.id, f"UPI Payment {'Enabled' if new_val else 'Disabled'}", show_alert=True)
+        cb_payment_settings(call)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "admset:toggle_binance")
+    def cb_toggle_binance(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        ps = get_payment_settings()
+        new_val = not ps.get("binance_enabled", True)
+        from database import settings_col
+        settings_col.update_one(
+            {"_id": "payment_settings"},
+            {"$set": {"binance_enabled": new_val}},
+            upsert=True
         )
-        bot.answer_callback_query(call.id)
+        bot.answer_callback_query(call.id, f"Binance Payment {'Enabled' if new_val else 'Disabled'}", show_alert=True)
+        cb_payment_settings(call)
+
+
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("admset:"))
     def cb_edit_setting(call: telebot.types.CallbackQuery):
@@ -1072,17 +1088,7 @@ def register(bot: telebot.TeleBot):
         current = "N/A"
         label = setting_key
         
-        if setting_key.startswith("pkg_"):
-            # Format: pkg_1_inr, pkg_3_usdt
-            parts = setting_key.split("_")
-            qty = parts[1]
-            curr = "UPI (₹)" if parts[2] == "inr" else "Binance ($)"
-            label = f"{qty} Credit(s) - {curr}"
-            
-            packages = get_credit_packages()
-            pkg = packages.get(int(qty), {})
-            current = pkg.get(parts[2], "N/A")
-        elif setting_key.startswith("referral_"):
+        if setting_key.startswith("referral_"):
             ref_config = get_referral_config()
             referral_labels = {
                 "referral_points_per_credit": "🔢 Points per Credit",
