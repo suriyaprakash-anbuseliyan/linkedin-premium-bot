@@ -404,7 +404,7 @@ def _handle_credit_amount_input(bot: telebot.TeleBot, message: telebot.types.Mes
         user_id,
         f"💳 <b>Select Payment Method</b>\n\n"
         f"You are purchasing <b>{credits_qty}</b> credits.\n"
-        f"Price: <b>₹{inr_price}</b> (or <b>${usdt_price}</b>)\n\n"
+        f"Price: <b>${usdt_price}</b> (or <b>₹{inr_price}</b>)\n\n"
         "Please select your preferred payment method below:",
         parse_mode="HTML",
         reply_markup=payment_method_kb(credits_qty),

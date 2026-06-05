@@ -49,7 +49,7 @@ def register(bot: telebot.TeleBot):
             "💳 <b>Add Credits</b>\n\n"
             "Please enter the number of credits you want to purchase.\n\n"
             "<i>Pricing Rules:</i>\n"
-            "• 2 Credits = ₹106 / $1\n"
+            "• 2 Credits = $1 / ₹106\n"
             "• Minimum purchase: 2 credits",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,

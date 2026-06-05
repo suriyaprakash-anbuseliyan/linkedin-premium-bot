@@ -144,7 +144,7 @@ def payment_method_kb(credits_qty: int) -> InlineKeyboardMarkup:
     if settings.get("upi_enabled", True):
         buttons.append(InlineKeyboardButton("💳 UPI", callback_data=f"pay:upi:{credits_qty}"))
     if settings.get("binance_enabled", True):
-        buttons.append(InlineKeyboardButton("🪙 Binance", callback_data=f"pay:binance:{credits_qty}"))
+        buttons.append(InlineKeyboardButton("🪙 Binance (Recommended)", callback_data=f"pay:binance:{credits_qty}"))
     
     if buttons:
         kb.add(*buttons)
