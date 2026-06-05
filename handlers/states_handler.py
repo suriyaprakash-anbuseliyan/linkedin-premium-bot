@@ -233,8 +233,7 @@ def register(bot: telebot.TeleBot):
         if not all_links:
             bot.send_message(
                 user_id,
-                "❌ No links found in the file.\n"
-                "Make sure they are valid http or https links.",
+                "❌ No valid items found in the file.",
             )
             return
 
@@ -688,7 +687,7 @@ def _handle_add_stock(
     extracted_urls = extract_all_links(text)
     
     if not extracted_urls:
-        bot.send_message(user_id, "❌ No links found in the text.\nMake sure they are valid http or https links.")
+        bot.send_message(user_id, "❌ No items found in the text.")
         return
 
     # Validate each link against LinkedIn referral format
@@ -734,8 +733,7 @@ def _handle_add_stock(
 
     if added == 0 and rejected:
         lines.append(
-            "\n⚠️ No links were added. Make sure links are valid URLs:\n"
-            "<code>https://example.com/redeem?...</code>"
+            "\n⚠️ No items were added."
         )
 
     bot.send_message(

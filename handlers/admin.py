@@ -633,8 +633,8 @@ def register(bot: telebot.TeleBot):
             "🔄 Duplicate links are automatically skipped.\n\n"
             "Example:\n"
             "<code>https://example.com/link1\n"
-            "https://example.com/link2\n"
-            "https://example.com/link3</code>",
+            "PROMO-CODE-123\n"
+            "username:password</code>",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",

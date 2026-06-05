@@ -84,31 +84,35 @@ def format_datetime(dt: datetime | None) -> str:
 
 
 def extract_all_links(text: str) -> list[str]:
-    """Extract all valid URLs from raw text."""
-    # Look for any http or https links
-    pattern = r'(https?://[^\s]+)'
-    matches = re.findall(pattern, text)
-    return matches
+    """Extract stock items from raw text. They can be URLs or any text strings."""
+    import re
+    items = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        
+        # If the line contains http/https, extract the URLs
+        if "http://" in line or "https://" in line:
+            pattern = r'(https?://[^\s]+)'
+            matches = re.findall(pattern, line)
+            if matches:
+                items.extend(matches)
+            else:
+                items.append(line)
+        else:
+            # It's a regular string (like a coupon code, username/password)
+            # Take the whole line as a single stock item
+            items.append(line)
+    return items
 
 
 def validate_link(url: str) -> bool:
     """
-    Validate that a URL is a genuine link.
-    Must be a valid http or https URL.
+    Validate that a stock item is valid.
+    We now allow ANY non-empty string.
     """
-    url = url.strip()
-    try:
-        parsed = urlparse(url)
-    except Exception:
-        return False
-
-    # Must be https or http
-    if parsed.scheme not in ("http", "https"):
-        return False
-    if not parsed.hostname:
-        return False
-
-    return True
+    return bool(url.strip())
 
 
 def get_payment_settings() -> dict:
