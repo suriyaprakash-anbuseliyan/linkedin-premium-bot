@@ -632,9 +632,9 @@ def register(bot: telebot.TeleBot):
             "containing your links.\n\n"
             "🔄 Duplicate links are automatically skipped.\n\n"
             "Example:\n"
-            "<code>https://linkedin.com/premium/link1\n"
-            "https://linkedin.com/premium/link2\n"
-            "https://linkedin.com/premium/link3</code>",
+            "<code>https://example.com/link1\n"
+            "https://example.com/link2\n"
+            "https://example.com/link3</code>",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",

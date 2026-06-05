@@ -214,7 +214,7 @@ def register(bot: telebot.TeleBot):
             return
 
         # Parse links from file
-        from utils.helpers import extract_all_linkedin_links, validate_linkedin_link
+        from utils.helpers import extract_all_links, validate_link
 
         all_links = []
         if file_name.lower().endswith(".csv"):
@@ -224,17 +224,17 @@ def register(bot: telebot.TeleBot):
                 for cell in row:
                     cell = cell.strip()
                     if cell:
-                        found = extract_all_linkedin_links(cell)
+                        found = extract_all_links(cell)
                         all_links.extend(found)
         else:
             # Plain text file — one link per line
-            all_links = extract_all_linkedin_links(file_content)
+            all_links = extract_all_links(file_content)
 
         if not all_links:
             bot.send_message(
                 user_id,
-                "❌ No LinkedIn Premium links found in the file.\n"
-                "Make sure they contain 'linkedin.com/premium/redeem/'",
+                "❌ No links found in the file.\n"
+                "Make sure they are valid http or https links.",
             )
             return
 
@@ -246,7 +246,7 @@ def register(bot: telebot.TeleBot):
         rejected = []
         seen = set()
         for url in all_links:
-            if validate_linkedin_link(url):
+            if validate_link(url):
                 if url not in seen:
                     valid_links.append(url)
                     seen.add(url)
@@ -658,7 +658,7 @@ def _handle_add_stock(
     state: dict,
     text: str,
 ):
-    from utils.helpers import extract_all_linkedin_links, validate_linkedin_link
+    from utils.helpers import extract_all_links, validate_link
 
     user_id = message.from_user.id
     product_id = state["product_id"]
@@ -685,10 +685,10 @@ def _handle_add_stock(
         return
 
     # Extract all possible links from the raw text
-    extracted_urls = extract_all_linkedin_links(text)
+    extracted_urls = extract_all_links(text)
     
     if not extracted_urls:
-        bot.send_message(user_id, "❌ No LinkedIn Premium links found in the text.\nMake sure they contain 'linkedin.com/premium/redeem/'")
+        bot.send_message(user_id, "❌ No links found in the text.\nMake sure they are valid http or https links.")
         return
 
     # Validate each link against LinkedIn referral format
@@ -696,7 +696,7 @@ def _handle_add_stock(
     rejected = []
     
     for url in extracted_urls:
-        if validate_linkedin_link(url):
+        if validate_link(url):
             # deduplicate within the batch
             if url not in valid_links:
                 valid_links.append(url)
@@ -734,8 +734,8 @@ def _handle_add_stock(
 
     if added == 0 and rejected:
         lines.append(
-            "\n⚠️ No links were added. Make sure links match:\n"
-            "<code>https://www.linkedin.com/premium/redeem/?...&coupon=XXXXX&...</code>"
+            "\n⚠️ No links were added. Make sure links are valid URLs:\n"
+            "<code>https://example.com/redeem?...</code>"
         )
 
     bot.send_message(
@@ -753,7 +753,7 @@ def _handle_add_stock_multi(
     text: str,
 ):
     """Handle multi-message stock adding. Accumulates links across messages until 'done'."""
-    from utils.helpers import extract_all_linkedin_links, validate_linkedin_link
+    from utils.helpers import extract_all_links, validate_link
 
     user_id = message.from_user.id
     product_id = state["product_id"]
@@ -774,7 +774,7 @@ def _handle_add_stock_multi(
         valid_links = []
         rejected = []
         for url in accumulated:
-            if validate_linkedin_link(url):
+            if validate_link(url):
                 if url not in valid_links:
                     valid_links.append(url)
             else:
@@ -815,11 +815,11 @@ def _handle_add_stock_multi(
         return
 
     # Extract links from this message and accumulate
-    new_links = extract_all_linkedin_links(text)
+    new_links = extract_all_links(text)
     if not new_links:
         bot.send_message(
             user_id,
-            "⚠️ No LinkedIn links found in that message. Try again or type <b>done</b> to finish.",
+            "⚠️ No links found in that message. Try again or type <b>done</b> to finish.",
             parse_mode="HTML",
         )
         return

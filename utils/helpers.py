@@ -83,23 +83,18 @@ def format_datetime(dt: datetime | None) -> str:
     return dt.strftime("%d %b %Y, %H:%M UTC")
 
 
-def extract_all_linkedin_links(text: str) -> list[str]:
-    """Extract all valid LinkedIn premium URLs from raw text."""
-    # Look for http or https linkedin.com/premium/redeem links
-    pattern = r'(https?://(?:www\.)?linkedin\.com/premium/redeem/[^\s]+)'
+def extract_all_links(text: str) -> list[str]:
+    """Extract all valid URLs from raw text."""
+    # Look for any http or https links
+    pattern = r'(https?://[^\s]+)'
     matches = re.findall(pattern, text)
     return matches
 
 
-def validate_linkedin_link(url: str) -> bool:
+def validate_link(url: str) -> bool:
     """
-    Validate that a URL is a genuine LinkedIn Premium referral link.
-    Required format:
-        https://www.linkedin.com/premium/redeem/?...&coupon=XXXXX&...
-    Must:
-      1. Be a linkedin.com domain
-      2. Have /premium/redeem/ in the path
-      3. Contain a non-empty 'coupon' query parameter
+    Validate that a URL is a genuine link.
+    Must be a valid http or https URL.
     """
     url = url.strip()
     try:
@@ -107,22 +102,10 @@ def validate_linkedin_link(url: str) -> bool:
     except Exception:
         return False
 
-    # Must be https and linkedin.com
+    # Must be https or http
     if parsed.scheme not in ("http", "https"):
         return False
     if not parsed.hostname:
-        return False
-    if not parsed.hostname.endswith("linkedin.com"):
-        return False
-
-    # Path must contain /premium/redeem/
-    if "/premium/redeem" not in parsed.path:
-        return False
-
-    # Must have a non-empty coupon parameter
-    params = parse_qs(parsed.query)
-    coupon_values = params.get("coupon", [])
-    if not coupon_values or not coupon_values[0].strip():
         return False
 
     return True
