@@ -378,6 +378,40 @@ def register(bot: telebot.TeleBot):
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
+# ║  CREDIT AMOUNT submission                                           ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def _handle_credit_amount_input(bot: telebot.TeleBot, message: telebot.types.Message, text: str):
+    user_id = message.from_user.id
+    try:
+        credits_qty = int(text)
+    except ValueError:
+        bot.send_message(user_id, "❌ Please enter a valid number.")
+        return
+
+    if credits_qty < 2:
+        bot.send_message(user_id, "❌ Minimum purchase is 2 credits.")
+        return
+
+    # Calculate prices based on 2 credits = ₹106 / $1
+    inr_price = credits_qty * 53
+    usdt_price = credits_qty * 0.5
+
+    user_states.clear(user_id)
+    
+    from keyboards.inline import payment_method_kb, cancel_payment_kb
+    bot.send_message(
+        user_id,
+        f"💳 <b>Select Payment Method</b>\n\n"
+        f"You are purchasing <b>{credits_qty}</b> credits.\n"
+        f"Price: <b>₹{inr_price}</b> (or <b>${usdt_price}</b>)\n\n"
+        "Please select your preferred payment method below:",
+        parse_mode="HTML",
+        reply_markup=payment_method_kb(credits_qty),
+    )
+
+
+# ╔══════════════════════════════════════════════════════════════════════╗
 # ║  PAYMENT submission                                                 ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
