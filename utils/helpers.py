@@ -61,19 +61,9 @@ def announce_event(bot: telebot.TeleBot, title: str, user_id: int, credits_remai
 def check_membership(bot: telebot.TeleBot, user_id: int) -> bool:
     """
     Return True if the user is a member of the required channel/group.
-    If REQUIRED_CHANNEL_USERNAME is not configured, everyone passes.
+    Membership check is currently disabled per user request.
     """
-    if not REQUIRED_CHANNEL_USERNAME:
-        return True  # no channel configured → skip check
-    try:
-        member = bot.get_chat_member(
-            chat_id=f"@{REQUIRED_CHANNEL_USERNAME}",
-            user_id=user_id,
-        )
-        return member.status in ("member", "administrator", "creator")
-    except telebot.apihelper.ApiTelegramException as exc:
-        logger.warning("Membership check failed for %s: %s", user_id, exc)
-        return False
+    return True
 
 
 def format_datetime(dt: datetime | None) -> str:

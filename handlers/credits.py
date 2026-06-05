@@ -45,6 +45,9 @@ def register(bot: telebot.TeleBot):
         
         user_states.set(call.from_user.id, {"action": "awaiting_credit_amount"})
 
+        kb = telebot.types.InlineKeyboardMarkup()
+        kb.add(telebot.types.InlineKeyboardButton("❌ Cancel", callback_data="menu:main"))
+
         bot.edit_message_text(
             "💳 <b>Add Credits</b>\n\n"
             "Please enter the number of credits you want to purchase.\n\n"
@@ -54,7 +57,7 @@ def register(bot: telebot.TeleBot):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=cancel_payment_kb(),
+            reply_markup=kb,
         )
         bot.answer_callback_query(call.id)
 

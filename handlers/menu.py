@@ -42,12 +42,17 @@ def _membership_gate(bot: telebot.TeleBot, call: telebot.types.CallbackQuery) ->
     return True
 
 
+from utils.states import user_states
+
 def register(bot: telebot.TeleBot):
 
     @bot.callback_query_handler(func=lambda c: c.data == "menu:main")
     def cb_main_menu(call: telebot.types.CallbackQuery):
         if not _membership_gate(bot, call):
             return
+            
+        user_states.clear(call.from_user.id)
+        
         bot.edit_message_text(
             WELCOME_TEXT,
             chat_id=call.message.chat.id,
