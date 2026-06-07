@@ -53,11 +53,24 @@ def register(bot: telebot.TeleBot):
             
         user_states.clear(call.from_user.id)
         
-        bot.edit_message_text(
-            WELCOME_TEXT,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            parse_mode="HTML",
-            reply_markup=main_menu_kb(),
-        )
+        try:
+            bot.edit_message_text(
+                WELCOME_TEXT,
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=main_menu_kb(),
+            )
+        except telebot.apihelper.ApiTelegramException as e:
+            if "message is not modified" not in str(e).lower():
+                try:
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                except Exception:
+                    pass
+                bot.send_message(
+                    call.message.chat.id,
+                    WELCOME_TEXT,
+                    parse_mode="HTML",
+                    reply_markup=main_menu_kb(),
+                )
         bot.answer_callback_query(call.id)

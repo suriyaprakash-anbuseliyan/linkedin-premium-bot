@@ -78,7 +78,7 @@ def register(bot: telebot.TeleBot):
 
             register_user(user_id, username, first_name, ref_code, referred_by)
             bot.send_message(
-                chat_id,
+                user_id,
                 f"👋 <b>Welcome {username}!</b>\n\n"
                 "You have successfully registered. Let's get started!",
                 parse_mode="HTML",
@@ -87,12 +87,12 @@ def register(bot: telebot.TeleBot):
             from database import is_welcome_bonus_enabled
             if is_welcome_bonus_enabled():
                 msg = bot.send_message(
-                    chat_id,
+                    user_id,
                     "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free credits in the Referral menu!",
                     parse_mode="HTML"
                 )
                 from database import schedule_message_cleanup
-                schedule_message_cleanup(chat_id, msg.message_id, hours=24)
+                schedule_message_cleanup(user_id, msg.message_id, hours=24)
             logger.info("New user registered: %s (%s)", user_id, username)
             from utils.helpers import announce_event
             announce_event(bot, "NEW USER JOINED", user_id, 0, "Registered")
