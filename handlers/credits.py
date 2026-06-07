@@ -11,7 +11,8 @@ from keyboards.inline import (
     payment_method_kb, cancel_payment_kb,
     admin_payment_review_kb, join_channel_kb,
 )
-from utils.helpers import check_membership, get_payment_settings
+from utils.helpers import check_membership
+from database import get_payment_settings
 from utils.states import user_states
 
 

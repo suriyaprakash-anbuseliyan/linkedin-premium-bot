@@ -18,6 +18,7 @@ from database import (
     is_maintenance_mode, set_maintenance_mode,
     is_referral_enabled, set_referral_enabled, get_referral_config, set_referral_config,
     is_credit_conversion_enabled, set_credit_conversion_enabled,
+    get_payment_settings,
 )
 from keyboards.inline import (
     admin_panel_kb, admin_back_kb,
@@ -25,7 +26,7 @@ from keyboards.inline import (
     admin_payment_review_kb, payment_settings_kb,
     referral_settings_kb,
 )
-from utils.helpers import is_admin, format_datetime, get_payment_settings
+from utils.helpers import is_admin, format_datetime
 from utils.states import user_states
 
 

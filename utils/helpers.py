@@ -105,22 +105,6 @@ def validate_link(url: str) -> bool:
     return bool(url.strip())
 
 
-def get_payment_settings() -> dict:
-    """
-    Get current payment settings. DB values override .env defaults.
-    Returns dict with keys: upi_id, upi_name, binance_uid
-    """
-    from database import get_setting
-    from config import UPI_ID, UPI_NAME, BINANCE_UID
-
-    return {
-        "upi_id": get_setting("upi_id", UPI_ID),
-        "upi_name": get_setting("upi_name", UPI_NAME),
-        "binance_uid": get_setting("binance_uid", BINANCE_UID),
-    }
-
-
-
 def get_referral_settings() -> dict:
     """
     Get current referral program settings from DB.
