@@ -52,6 +52,7 @@ def verify_razorpay_payment(payment_link_id: str) -> bool:
 
 def verify_binance_pay_transaction(order_id: str, expected_amount: float, expected_note: str) -> bool:
     if not BINANCE_API_KEY or not BINANCE_API_SECRET:
+        logger.warning("Binance API keys not configured.")
         return False
         
     url = "https://api.binance.com/sapi/v1/pay/transactions"
@@ -80,21 +81,34 @@ def verify_binance_pay_transaction(order_id: str, expected_amount: float, expect
         if data.get("code") == "000000" and "data" in data:
             transactions = data["data"]
             for tx in transactions:
-                # Binance Pay transaction ID is usually orderId
-                if tx.get("orderId") == order_id:
-                    # Check if the note matches exactly
+                # Binance Pay transaction ID is usually orderId or transactionId
+                if tx.get("orderId") == order_id or tx.get("transactionId") == order_id:
+                    # Check if the note matches
                     actual_note = tx.get("note", "").strip()
-                    if actual_note != expected_note:
+                    if actual_note.lower() != expected_note.lower():
                         logger.warning("Binance Pay Note mismatch: expected %s, got %s", expected_note, actual_note)
                         return False
                         
                     # Check amount matches
+                    amount = 0.0
+                    currency = ""
                     funds = tx.get("fundsDetail", [])
                     if funds:
                         amount = float(funds[0].get("amount", 0))
                         currency = funds[0].get("currency", "")
-                        if currency == "USDT" and abs(amount - expected_amount) < 0.01:
-                            return True
+                    else:
+                        amount = float(tx.get("amount", 0))
+                        currency = tx.get("currency", "")
+                        
+                    if currency == "USDT" and abs(amount - expected_amount) < 0.01:
+                        logger.info("Binance Pay transaction %s verified successfully.", order_id)
+                        return True
+                    else:
+                        logger.warning("Binance Pay Amount/Currency mismatch: expected %s USDT, got %s %s", expected_amount, amount, currency)
+                        return False
+            logger.warning("Binance Pay transaction %s not found in the recent history.", order_id)
+        else:
+            logger.error("Binance API returned error: %s", data)
         return False
     except Exception as e:
         logger.error("Failed to query Binance API: %s", e)

@@ -45,6 +45,7 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     )
     kb.add(
         InlineKeyboardButton(**btn_config("menu_support", "Support", "📞"), callback_data="menu:support"),
+        InlineKeyboardButton(**btn_config("menu_refresh", "Refresh", "🔄", "secondary"), callback_data="menu:refresh"),
     )
     return kb
 
@@ -404,7 +405,10 @@ def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: boo
         InlineKeyboardButton(toggle_label, callback_data=toggle_cb),
         InlineKeyboardButton("🗑 Delete", callback_data=f"admprod:delete:{product_id}"),
     )
-    kb.add(InlineKeyboardButton(qr_label, callback_data=f"admprod:toggle_qr:{product_id}"))
+    kb.add(
+        InlineKeyboardButton(qr_label, callback_data=f"admprod:toggle_qr:{product_id}"),
+        InlineKeyboardButton("📝 Edit Delivery Msg", callback_data=f"admprod:edit_delmsg:{product_id}")
+    )
     kb.add(InlineKeyboardButton("🔙 Back", callback_data="adm:manage_products"))
     return kb
 

@@ -642,6 +642,12 @@ def _handle_admin_edit_product(
             html_desc = text
         update_product(pid, {"$set": {"description": html_desc.strip() if html_desc else ""}})
         field_str = "Description"
+    elif field == "delmsg":
+        html_desc = html_text
+        if not html_desc:
+            html_desc = text
+        update_product(pid, {"$set": {"delivery_message": html_desc.strip() if html_desc else ""}})
+        field_str = "Delivery Message"
         
     user_states.clear(user_id)
     

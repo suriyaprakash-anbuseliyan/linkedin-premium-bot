@@ -572,7 +572,7 @@ def register(bot: telebot.TeleBot):
             return
         # format: admprod:edit_name:<pid>
         parts = call.data.split(":")
-        field_type = parts[1].split("_")[1] # "name", "desc", or "cost"
+        field_type = parts[1].split("_")[1] # "name", "desc", "cost", or "delmsg"
         pid = parts[2]
         
         product = get_product(pid)
@@ -583,7 +583,8 @@ def register(bot: telebot.TeleBot):
         field_name_map = {
             "name": "Name",
             "desc": "Description",
-            "cost": "Cost (Credits)"
+            "cost": "Cost (Credits)",
+            "delmsg": "Delivery Message"
         }
         
         user_states.set(call.from_user.id, {
@@ -592,7 +593,14 @@ def register(bot: telebot.TeleBot):
             "field": field_type
         })
         
-        current_val = product.get('name' if field_type == 'name' else 'description' if field_type == 'desc' else 'credit_cost')
+        if field_type == 'name':
+            current_val = product.get('name')
+        elif field_type == 'desc':
+            current_val = product.get('description')
+        elif field_type == 'delmsg':
+            current_val = product.get('delivery_message', '')
+        else:
+            current_val = product.get('credit_cost')
         
         bot.edit_message_text(
             f"✏️ <b>Edit {field_name_map[field_type]}</b>\n\n"

@@ -259,13 +259,17 @@ def register(bot: telebot.TeleBot):
             from keyboards.inline import back_to_menu_kb
             reply_markup = back_to_menu_kb()
 
+        delivery_msg = product.get("delivery_message", "").strip()
+        if not delivery_msg:
+            delivery_msg = "Thank you for your purchase! 🎉"
+
         if is_num:
             links_block = ""
             text = (
                 "✅ <b>Purchase Successful!</b>\n\n"
                 f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
                 f"{qr_text}"
-                "Thank you for your purchase! 🎉"
+                f"{delivery_msg}"
             )
             bot.edit_message_text(
                 text,
@@ -287,7 +291,7 @@ def register(bot: telebot.TeleBot):
                 f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
                 f"{links_block}"
                 f"{qr_text}"
-                "Thank you for your purchase! 🎉"
+                f"{delivery_msg}"
             )
             
             if len(text) > 4000:
@@ -295,7 +299,7 @@ def register(bot: telebot.TeleBot):
                     "✅ <b>Purchase Successful!</b>\n\n"
                     f"📦 <b>{product['name']}</b> (x{actual_qty})\n\n"
                     f"{qr_text}"
-                    "Thank you for your purchase! 🎉\n\n"
+                    f"{delivery_msg}\n\n"
                     "<i>Your links are provided in the attached file below because there are too many to show here.</i>"
                 )
                 bot.edit_message_text(

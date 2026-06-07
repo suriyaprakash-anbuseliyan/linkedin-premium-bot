@@ -154,6 +154,7 @@ def create_product(name: str, description: str, credit_cost: int, is_numerical: 
         "is_numerical": is_numerical,
         "numerical_stock": numerical_stock,
         "requires_qr": requires_qr,
+        "delivery_message": "",
         "created_at": datetime.now(timezone.utc),
     }
     result = products_col.insert_one(doc)
@@ -383,19 +384,26 @@ def set_setting(key: str, value: str) -> None:
 
 
 def get_payment_settings() -> dict:
-    doc = settings_col.find_one({"_id": "payment_settings"})
-    if not doc:
-        from config import UPI_ID, UPI_NAME, BINANCE_UID
-        return {"upi_id": UPI_ID, "upi_name": UPI_NAME, "binance_uid": BINANCE_UID}
-    return doc
+    doc = settings_col.find_one({"_id": "payment_settings"}) or {}
+    from config import UPI_ID, UPI_NAME, BINANCE_UID
+    return {
+        "upi_id": get_setting("upi_id", UPI_ID),
+        "upi_name": get_setting("upi_name", UPI_NAME),
+        "binance_uid": get_setting("binance_uid", BINANCE_UID),
+        "upi_enabled": doc.get("upi_enabled", True),
+        "binance_enabled": doc.get("binance_enabled", True)
+    }
 
 
 def update_payment_settings(upi_id: str, upi_name: str, binance_uid: str) -> None:
     settings_col.update_one(
         {"_id": "payment_settings"},
-        {"$set": {"upi_id": upi_id, "upi_name": upi_name, "binance_uid": binance_uid}},
+        {"$set": {"upi_enabled": True, "binance_enabled": True}},
         upsert=True
     )
+    set_setting("upi_id", upi_id)
+    set_setting("upi_name", upi_name)
+    set_setting("binance_uid", binance_uid)
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗

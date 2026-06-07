@@ -74,3 +74,23 @@ def register(bot: telebot.TeleBot):
                     reply_markup=main_menu_kb(),
                 )
         bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "menu:refresh")
+    def cb_refresh_menu(call: telebot.types.CallbackQuery):
+        if not _membership_gate(bot, call):
+            return
+            
+        user_states.clear(call.from_user.id)
+        
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception:
+            pass
+            
+        bot.send_message(
+            call.message.chat.id,
+            WELCOME_TEXT,
+            parse_mode="HTML",
+            reply_markup=main_menu_kb(),
+        )
+        bot.answer_callback_query(call.id, "Session refreshed!")
