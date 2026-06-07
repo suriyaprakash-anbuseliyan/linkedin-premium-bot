@@ -209,7 +209,9 @@ def add_stock_items(product_id: str, links: list[str]) -> tuple[int, int]:
     from bson import ObjectId
     from datetime import timedelta
     now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(days=7)
+    
+    del_settings = get_delivery_settings()
+    expires_at = now + timedelta(days=del_settings.get("expiration_days", 7))
 
     # Filter out links that already exist in any product's stock
     stripped_links = [link.strip() for link in links if link.strip()]
@@ -404,6 +406,24 @@ def update_payment_settings(upi_id: str, upi_name: str, binance_uid: str) -> Non
     set_setting("upi_id", upi_id)
     set_setting("upi_name", upi_name)
     set_setting("binance_uid", binance_uid)
+
+
+def get_delivery_settings() -> dict:
+    """Get delivery settings like expiration days and messages."""
+    doc = settings_col.find_one({"_id": "delivery_settings"}) or {}
+    return {
+        "global_message": doc.get("global_message", "Thank you for your purchase! 🎉"),
+        "expiration_days": doc.get("expiration_days", 7),
+        "expiration_warning": doc.get("expiration_warning", "⚠️ <i>Use these links within {days} days before they expire.</i>")
+    }
+
+def update_delivery_settings(update_data: dict) -> None:
+    """Update delivery settings."""
+    settings_col.update_one(
+        {"_id": "delivery_settings"},
+        {"$set": update_data},
+        upsert=True
+    )
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗

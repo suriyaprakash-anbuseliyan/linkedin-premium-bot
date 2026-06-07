@@ -203,6 +203,9 @@ def admin_panel_kb(is_maintenance: bool = False, is_referral: bool = True) -> In
         InlineKeyboardButton("🔍 Search Link/Code", callback_data="adm:search"),
         InlineKeyboardButton("🎨 UI Settings", callback_data="adm:ui_settings"),
     )
+    kb.add(
+        InlineKeyboardButton("📦 Delivery Settings", callback_data="adm:delivery_settings"),
+    )
     
     maint_label = "🟢 Maintenance: ON" if is_maintenance else "🔴 Maintenance: OFF"
     kb.add(
@@ -237,6 +240,17 @@ def payment_settings_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton("🪙 Edit Binance UID", callback_data="admset:binance_uid"),
     )
     kb.add(InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"))
+    return kb
+
+
+def admin_delivery_settings_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("📝 Edit Global Delivery Msg", callback_data="admset:del_global_msg"),
+        InlineKeyboardButton("⏳ Edit Expiration Days", callback_data="admset:del_exp_days"),
+        InlineKeyboardButton("⚠️ Edit Expiration Warning", callback_data="admset:del_exp_warn"),
+        InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel")
+    )
     return kb
 
 

@@ -149,6 +149,11 @@ def register(bot: telebot.TeleBot):
             _handle_edit_setting(bot, message, state, text)
             return
 
+        # ── ADMIN: Edit delivery setting ──────────────────────────────
+        if action.startswith("admin_set_del_") and is_admin(user_id):
+            _handle_admin_delivery_settings(bot, message, state, text, html_text)
+            return
+
         # ── USER: Buy multiple links ─────────────────────────────────
         if action == "buy_quantity":
             _handle_buy_quantity(bot, message, state, text)
@@ -1267,6 +1272,67 @@ def _handle_broadcast(
         f"✅ Sent: {success}\n❌ Failed: {failed}",
         parse_mode="HTML",
         reply_markup=admin_panel_kb(),
+    )
+
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  ADMIN: Edit delivery setting                                       ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def _handle_admin_delivery_settings(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    state: dict,
+    text: str,
+    html_text: str,
+):
+    from database import get_delivery_settings, update_delivery_settings
+    from keyboards.inline import admin_delivery_settings_kb
+
+    user_id = message.from_user.id
+    action = state["action"]
+
+    if not text:
+        bot.send_message(user_id, "❌ Value cannot be empty. Try again.")
+        return
+
+    update_data = {}
+    if action == "admin_set_del_global_msg":
+        val = html_text if html_text else text
+        update_data["global_message"] = val.strip()
+        field_name = "Global Delivery Message"
+    elif action == "admin_set_del_exp_days":
+        try:
+            val = int(text)
+            if val < 0:
+                raise ValueError
+        except ValueError:
+            bot.send_message(user_id, "❌ Please enter a valid non-negative integer.")
+            return
+        update_data["expiration_days"] = val
+        field_name = "Expiration Days"
+    elif action == "admin_set_del_exp_warn":
+        val = html_text if html_text else text
+        update_data["expiration_warning"] = val.strip()
+        field_name = "Expiration Warning Text"
+
+    update_delivery_settings(update_data)
+    user_states.clear(user_id)
+
+    del_settings = get_delivery_settings()
+    text_msg = (
+        f"✅ <b>{field_name} Updated!</b>\n\n"
+        "📦 <b>Delivery Settings</b>\n\n"
+        f"<b>Global Delivery Message:</b>\n<code>{del_settings['global_message']}</code>\n\n"
+        f"<b>Expiration Days (for new stock):</b> <code>{del_settings['expiration_days']}</code>\n\n"
+        f"<b>Expiration Warning Text:</b>\n<code>{del_settings['expiration_warning']}</code>\n\n"
+        "Tap a button below to edit:"
+    )
+    bot.send_message(
+        user_id,
+        text_msg,
+        parse_mode="HTML",
+        reply_markup=admin_delivery_settings_kb()
     )
 
 

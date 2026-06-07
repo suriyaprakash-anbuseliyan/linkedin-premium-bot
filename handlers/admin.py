@@ -24,7 +24,7 @@ from keyboards.inline import (
     admin_panel_kb, admin_back_kb,
     admin_products_list_kb, admin_product_actions_kb,
     admin_payment_review_kb, payment_settings_kb,
-    referral_settings_kb,
+    referral_settings_kb, admin_delivery_settings_kb,
 )
 from utils.helpers import is_admin, format_datetime
 from utils.states import user_states
@@ -196,6 +196,61 @@ def register(bot: telebot.TeleBot):
             message_id=call.message.message_id,
             parse_mode="HTML",
             reply_markup=referral_settings_kb(ref_config, is_conv, is_welcome),
+        )
+        bot.answer_callback_query(call.id)
+
+    # ── Delivery Settings ────────────────────────────────────────────────
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:delivery_settings")
+    def cb_delivery_settings(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+        
+        from database import get_delivery_settings
+        del_settings = get_delivery_settings()
+        
+        text = (
+            "📦 <b>Delivery Settings</b>\n\n"
+            f"<b>Global Delivery Message:</b>\n<code>{del_settings['global_message']}</code>\n\n"
+            f"<b>Expiration Days (for new stock):</b> <code>{del_settings['expiration_days']}</code>\n\n"
+            f"<b>Expiration Warning Text:</b>\n<code>{del_settings['expiration_warning']}</code>\n\n"
+            "Tap a button below to edit:"
+        )
+        bot.edit_message_text(
+            text,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=admin_delivery_settings_kb(),
+        )
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admset:del_"))
+    def cb_edit_delivery_setting(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔", show_alert=True)
+            return
+            
+        setting_type = call.data.split(":")[1]
+        
+        if setting_type == "del_global_msg":
+            prompt = "📝 <b>Edit Global Delivery Message</b>\n\nSend the new default delivery message (HTML supported):"
+            action = "admin_set_del_global_msg"
+        elif setting_type == "del_exp_days":
+            prompt = "⏳ <b>Edit Expiration Days</b>\n\nSend the number of days links are valid for (integer):"
+            action = "admin_set_del_exp_days"
+        elif setting_type == "del_exp_warn":
+            prompt = "⚠️ <b>Edit Expiration Warning Text</b>\n\nSend the new expiration warning message (HTML supported).\nUse <code>{days}</code> as a placeholder for the number of days."
+            action = "admin_set_del_exp_warn"
+        else:
+            return
+            
+        user_states.set(call.from_user.id, {"action": action})
+        bot.send_message(
+            call.message.chat.id,
+            prompt,
+            parse_mode="HTML",
+            reply_markup=admin_back_kb()
         )
         bot.answer_callback_query(call.id)
 

@@ -259,9 +259,12 @@ def register(bot: telebot.TeleBot):
             from keyboards.inline import back_to_menu_kb
             reply_markup = back_to_menu_kb()
 
+        from database import get_delivery_settings
+        del_settings = get_delivery_settings()
+
         delivery_msg = product.get("delivery_message", "").strip()
         if not delivery_msg:
-            delivery_msg = "Thank you for your purchase! 🎉"
+            delivery_msg = del_settings.get("global_message", "Thank you for your purchase! 🎉")
 
         if is_num:
             links_block = ""
@@ -284,7 +287,8 @@ def register(bot: telebot.TeleBot):
                 f"⏰ Expires: {item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'}"
                 for item in claimed_items
             )
-            links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n⚠️ <i>Use these links within 7 days before they expire.</i>\n\n"
+            warn_text = del_settings.get("expiration_warning", "⚠️ <i>Use these links within {days} days before they expire.</i>").replace("{days}", str(del_settings.get("expiration_days", 7)))
+            links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n{warn_text}\n\n"
 
             text = (
                 "✅ <b>Purchase Successful!</b>\n\n"
@@ -322,7 +326,7 @@ def register(bot: telebot.TeleBot):
                 bot.send_document(
                     call.message.chat.id, 
                     document=doc, 
-                    caption="⚠️ <i>Use these links within 7 days before they expire.</i>", 
+                    caption=warn_text, 
                     parse_mode="HTML"
                 )
             else:
