@@ -45,7 +45,7 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     )
     kb.add(
         InlineKeyboardButton(**btn_config("menu_support", "Support", "📞"), callback_data="menu:support"),
-        InlineKeyboardButton(**btn_config("menu_refresh", "Refresh", "🔄", "secondary"), callback_data="menu:refresh"),
+        InlineKeyboardButton(**btn_config("menu_refresh", "Refresh", "🔄"), callback_data="menu:refresh"),
     )
     return kb
 
