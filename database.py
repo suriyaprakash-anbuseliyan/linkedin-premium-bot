@@ -210,8 +210,14 @@ def add_stock_items(product_id: str, links: list[str]) -> tuple[int, int]:
     from datetime import timedelta
     now = datetime.now(timezone.utc)
     
-    del_settings = get_delivery_settings()
-    expires_at = now + timedelta(days=del_settings.get("expiration_days", 7))
+    product = products_col.find_one({"_id": ObjectId(product_id)})
+    if product and "expiration_days" in product:
+        exp_days = product["expiration_days"]
+    else:
+        del_settings = get_delivery_settings()
+        exp_days = del_settings.get("expiration_days", 7)
+        
+    expires_at = now + timedelta(days=exp_days)
 
     # Filter out links that already exist in any product's stock
     stripped_links = [link.strip() for link in links if link.strip()]

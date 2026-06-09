@@ -640,7 +640,8 @@ def register(bot: telebot.TeleBot):
             "name": "Name",
             "desc": "Description",
             "cost": "Cost (Credits)",
-            "delmsg": "Delivery Message"
+            "delmsg": "Delivery Message",
+            "expdays": "Expiration Days"
         }
         
         user_states.set(call.from_user.id, {
@@ -655,6 +656,8 @@ def register(bot: telebot.TeleBot):
             current_val = product.get('description')
         elif field_type == 'delmsg':
             current_val = product.get('delivery_message', '')
+        elif field_type == 'expdays':
+            current_val = product.get('expiration_days', 'Global Default')
         else:
             current_val = product.get('credit_cost')
         

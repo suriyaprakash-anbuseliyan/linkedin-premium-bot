@@ -653,6 +653,16 @@ def _handle_admin_edit_product(
             html_desc = text
         update_product(pid, {"$set": {"delivery_message": html_desc.strip() if html_desc else ""}})
         field_str = "Delivery Message"
+    elif field == "expdays":
+        try:
+            val = int(text)
+            if val < 0:
+                raise ValueError
+        except ValueError:
+            bot.send_message(user_id, "❌ Please enter a valid non-negative integer for expiration days.")
+            return
+        update_product(pid, {"$set": {"expiration_days": val}})
+        field_str = "Expiration Days"
         
     user_states.clear(user_id)
     

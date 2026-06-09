@@ -423,6 +423,9 @@ def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: boo
         InlineKeyboardButton(qr_label, callback_data=f"admprod:toggle_qr:{product_id}"),
         InlineKeyboardButton("📝 Edit Delivery Msg", callback_data=f"admprod:edit_delmsg:{product_id}")
     )
+    kb.add(
+        InlineKeyboardButton("⏳ Edit Expire Days", callback_data=f"admprod:edit_expdays:{product_id}")
+    )
     kb.add(InlineKeyboardButton("🔙 Back", callback_data="adm:manage_products"))
     return kb
 

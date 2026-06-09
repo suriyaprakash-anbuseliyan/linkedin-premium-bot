@@ -287,7 +287,8 @@ def register(bot: telebot.TeleBot):
                 f"⏰ Expires: {item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'}"
                 for item in claimed_items
             )
-            warn_text = del_settings.get("expiration_warning", "⚠️ <i>Use these links within {days} days before they expire.</i>").replace("{days}", str(del_settings.get("expiration_days", 7)))
+            product_exp_days = product.get("expiration_days", del_settings.get("expiration_days", 7))
+            warn_text = del_settings.get("expiration_warning", "⚠️ <i>Use these links within {days} days before they expire.</i>").replace("{days}", str(product_exp_days))
             links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n{warn_text}\n\n"
 
             text = (
