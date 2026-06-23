@@ -11,7 +11,15 @@ import os
 import sys
 import logging
 from dotenv import load_dotenv
+import socket
 
+# Force IPv4 because Oracle IPv6 is sometimes unreachable
+def _getaddrinfo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
+    return socket._original_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+
+if not hasattr(socket, '_original_getaddrinfo'):
+    socket._original_getaddrinfo = socket.getaddrinfo
+    socket.getaddrinfo = _getaddrinfo_ipv4
 # ── Load .env ────────────────────────────────────────────────────────────
 load_dotenv()
 
