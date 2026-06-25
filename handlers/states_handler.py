@@ -149,6 +149,11 @@ def register(bot: telebot.TeleBot):
             _handle_admin_cancel_order(bot, message, text)
             return
 
+        # ── ADMIN: Search Order ──────────────────────────────────────
+        if action == "admin_search_order" and is_admin(user_id):
+            _handle_admin_search_order(bot, message, text)
+            return
+
         # ── ADMIN: Edit payment setting ──────────────────────────────
         if action == "admin_edit_setting" and is_admin(user_id):
             _handle_edit_setting(bot, message, state, text)
@@ -1341,6 +1346,103 @@ def _handle_admin_cancel_order(
         )
     except:
         pass
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  ADMIN: Search Order                                                 ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def _handle_admin_search_order(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    text: str,
+):
+    user_id = message.from_user.id
+    search_query = text.strip()
+    user_states.clear(user_id)
+    
+    from bson.errors import InvalidId
+    from bson import ObjectId
+    from database import orders_col, qr_orders_col, get_user_orders
+    from utils.helpers import format_datetime
+    from keyboards.inline import admin_panel_kb
+    
+    # Check if it's an ObjectId (Order ID)
+    try:
+        oid = ObjectId(search_query)
+        is_oid = True
+    except InvalidId:
+        is_oid = False
+        
+    if is_oid:
+        order = orders_col.find_one({"_id": oid})
+        if not order:
+            qr_order = qr_orders_col.find_one({"_id": oid})
+            if qr_order and qr_order.get("order_id"):
+                try:
+                    order = orders_col.find_one({"_id": ObjectId(qr_order["order_id"])})
+                except:
+                    pass
+        if order:
+            # Display order details
+            order_id = str(order["_id"])
+            items = order.get("items", [])
+            items_str = "\n".join([f"   - {item}" for item in items[:10]])
+            if len(items) > 10:
+                items_str += f"\n   - ... and {len(items)-10} more"
+                
+            info = (
+                f"🔎 <b>Order Details</b>\n\n"
+                f"🆔 <b>Order ID:</b> <code>{order_id}</code>\n"
+                f"👤 <b>User ID:</b> <code>{order.get('user_id')}</code>\n"
+                f"📦 <b>Product:</b> {order.get('product_name')}\n"
+                f"💎 <b>Credits Used:</b> {order.get('credits_used')}\n"
+                f"📅 <b>Date:</b> {format_datetime(order.get('created_at'))}\n\n"
+                f"📋 <b>Items:</b>\n{items_str}"
+            )
+            
+            # Check QR status if applicable
+            qr_order = qr_orders_col.find_one({"order_id": order_id})
+            if qr_order:
+                info += f"\n\n📷 <b>QR Status:</b> {qr_order.get('status')}"
+                if qr_order.get("file_id"):
+                    bot.send_photo(user_id, qr_order["file_id"], caption=info, parse_mode="HTML", reply_markup=admin_panel_kb())
+                    return
+            
+            bot.send_message(user_id, info, parse_mode="HTML", reply_markup=admin_panel_kb())
+            return
+
+    # If not found as Order ID, maybe it's a User ID
+    try:
+        target_uid = int(search_query)
+    except ValueError:
+        bot.send_message(user_id, "❌ Invalid ID format. Not an Order ID or User ID.", reply_markup=admin_panel_kb())
+        return
+        
+    orders = get_user_orders(target_uid)
+    if not orders:
+        bot.send_message(user_id, f"❌ No orders found for User ID <code>{target_uid}</code>.", parse_mode="HTML", reply_markup=admin_panel_kb())
+        return
+        
+    lines = [f"📜 <b>Orders for User <code>{target_uid}</code></b>\n"]
+    for i, order in enumerate(orders[:20], 1):
+        order_id = str(order['_id'])
+        order_text = (
+            f"{i}. <b>{order['product_name']}</b>\n"
+            f"   💎 Credits: {order['credits_used']}  •  "
+            f"📅 {format_datetime(order.get('created_at'))}\n"
+            f"   🆔 Order ID: <code>{order_id}</code>\n"
+        )
+        if len("\n".join(lines)) + len(order_text) > 3900:
+            lines.append("\n<i>... and older orders</i>")
+            break
+        lines.append(order_text)
+        
+    bot.send_message(
+        user_id,
+        "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=admin_panel_kb()
+    )
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
