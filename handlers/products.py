@@ -26,6 +26,8 @@ ACCESS_RESTRICTED = (
     "To use this bot, please join our community first."
 )
 
+TIMER_CONTEXTS = {}
+
 def _qr_timeout(bot: telebot.TeleBot, qr_order_id: str, user_id: int):
     from database import get_qr_order
     qr_order = get_qr_order(qr_order_id)
@@ -46,15 +48,57 @@ def _qr_timeout(bot: telebot.TeleBot, qr_order_id: str, user_id: int):
             bot.send_message(
                 user_id,
                 "❌ <b>QR Upload Timeout</b>\n\n"
-                f"You did not upload the QR code within 1 minute. "
+                f"You did not upload the QR code within 150 seconds. "
                 f"Your order for {qr_order.get('qty')}x <b>{qr_order.get('product_name')}</b> has been cancelled and {credits_to_refund} credit(s) have been refunded.",
                 parse_mode="HTML"
             )
         except Exception:
             pass
 
-def start_qr_timeout(bot: telebot.TeleBot, qr_order_id: str, user_id: int):
-    threading.Timer(60.0, _qr_timeout, args=(bot, qr_order_id, user_id)).start()
+def start_qr_timeout(bot: telebot.TeleBot, qr_order_id: str, user_id: int, chat_id: int = None, message_id: int = None, base_text: str = None, reply_markup = None):
+    TIMER_CONTEXTS[qr_order_id] = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "base_text": base_text,
+        "reply_markup": reply_markup
+    }
+    
+    def _timer_worker():
+        import time
+        from database import get_qr_order
+        timeout = 150
+        step = 5
+        
+        for remaining in range(timeout, 0, -step):
+            qr_order = get_qr_order(qr_order_id)
+            if not qr_order or qr_order["status"] not in ("awaiting_qr", "reupload"):
+                TIMER_CONTEXTS.pop(qr_order_id, None)
+                return
+                
+            ctx = TIMER_CONTEXTS.get(qr_order_id, {})
+            c_chat = ctx.get("chat_id")
+            c_msg = ctx.get("message_id")
+            c_text = ctx.get("base_text")
+            c_markup = ctx.get("reply_markup")
+            
+            if c_chat and c_msg and c_text:
+                timer_text = f"\n\n⏳ <b>Time remaining to upload QR:</b> {remaining} seconds"
+                try:
+                    bot.edit_message_text(
+                        c_text + timer_text,
+                        chat_id=c_chat,
+                        message_id=c_msg,
+                        parse_mode="HTML",
+                        reply_markup=c_markup
+                    )
+                except Exception:
+                    pass
+            time.sleep(step)
+            
+        TIMER_CONTEXTS.pop(qr_order_id, None)
+        _qr_timeout(bot, qr_order_id, user_id)
+
+    threading.Thread(target=_timer_worker, daemon=True).start()
 
 def _gate(bot, call):
     if not check_membership(bot, call.from_user.id):
@@ -282,7 +326,6 @@ def register(bot: telebot.TeleBot):
                 qty=actual_qty,
                 is_numerical=is_num,
             )
-            start_qr_timeout(bot, qr_order_id, call.from_user.id)
             qr_text = "📲 <b>Upload your UPI QR code</b> to complete the payment process.\n"
             reply_markup = purchase_success_qr_kb(qr_order_id)
         else:
@@ -371,6 +414,10 @@ def register(bot: telebot.TeleBot):
                 )
 
         bot.answer_callback_query(call.id, "✅ Purchase complete!")
+        
+        if requires_qr and qr_order_id:
+            final_text = brief_text if ('brief_text' in locals() and len(text) > 4000) else text
+            start_qr_timeout(bot, qr_order_id, call.from_user.id, call.message.chat.id, call.message.message_id, final_text, reply_markup)
 
     # ── QR Upload prompt ───────────────────────────────────────────────
     @bot.callback_query_handler(func=lambda c: c.data.startswith("qr:upload:"))
@@ -394,13 +441,21 @@ def register(bot: telebot.TeleBot):
             "action": "awaiting_qr_upload",
             "qr_order_id": qr_order_id,
         })
-        bot.edit_message_text(
+        base_text = (
             "📲 <b>Upload QR Code</b>\n\n"
             "Please send your <b>UPI QR code image</b> now.\n\n"
-            "<i>⚠️ Make sure the QR code is clear and not expired.</i>",
+            "<i>⚠️ Make sure the QR code is clear and not expired.</i>"
+        )
+        bot.edit_message_text(
+            base_text,
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
             reply_markup=back_to_menu_kb(),
         )
+        if qr_order_id in TIMER_CONTEXTS:
+            TIMER_CONTEXTS[qr_order_id].update({
+                "base_text": base_text,
+                "reply_markup": back_to_menu_kb()
+            })
         bot.answer_callback_query(call.id)

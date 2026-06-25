@@ -1440,14 +1440,20 @@ def register(bot: telebot.TeleBot):
             # Notify user with reupload prompt
             from keyboards.inline import purchase_success_qr_kb
             try:
-                bot.send_message(
-                    user_id,
+                base_text = (
                     "⚠️ <b>Your QR is expired or there was a payment error.</b>\n\n"
                     "Please reupload a <b>fresh new QR code</b>.\n\n"
-                    "<i>⚠️ Do not upload the same QR code again.</i>",
-                    parse_mode="HTML",
-                    reply_markup=purchase_success_qr_kb(qr_order_id),
+                    "<i>⚠️ Do not upload the same QR code again.</i>"
                 )
+                reply_kb = purchase_success_qr_kb(qr_order_id)
+                msg = bot.send_message(
+                    user_id,
+                    base_text,
+                    parse_mode="HTML",
+                    reply_markup=reply_kb,
+                )
+                from handlers.products import start_qr_timeout
+                start_qr_timeout(bot, qr_order_id, user_id, msg.chat.id, msg.message_id, base_text, reply_kb)
             except Exception:
                 pass
             bot.answer_callback_query(call.id, "🔄 Reupload requested", show_alert=True)
