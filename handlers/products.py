@@ -5,11 +5,12 @@ Product browsing and purchasing flow for users.
 """
 
 import telebot
+import threading
 from database import (
     get_active_products, get_product, get_user,
     remove_credits, create_order,
     get_available_stock_count, claim_stock_item,
-    create_qr_order,
+    create_qr_order, update_qr_order_status, add_credits, refund_stock
 )
 from keyboards.inline import (
     products_list_kb, product_detail_kb, confirm_purchase_kb,
@@ -25,6 +26,35 @@ ACCESS_RESTRICTED = (
     "To use this bot, please join our community first."
 )
 
+def _qr_timeout(bot: telebot.TeleBot, qr_order_id: str, user_id: int):
+    from database import get_qr_order
+    qr_order = get_qr_order(qr_order_id)
+    if qr_order and qr_order["status"] in ("awaiting_qr", "reupload"):
+        update_qr_order_status(qr_order_id, "cancelled")
+        credits_to_refund = qr_order.get("credits_used", 0)
+        if credits_to_refund > 0:
+            add_credits(user_id, credits_to_refund)
+            
+        refund_stock(
+            product_id=qr_order.get("product_id"),
+            qty=qr_order.get("qty", 1),
+            is_numerical=qr_order.get("is_numerical", False),
+            items=qr_order.get("items", [])
+        )
+        
+        try:
+            bot.send_message(
+                user_id,
+                "❌ <b>QR Upload Timeout</b>\n\n"
+                f"You did not upload the QR code within 1 minute. "
+                f"Your order for {qr_order.get('qty')}x <b>{qr_order.get('product_name')}</b> has been cancelled and {credits_to_refund} credit(s) have been refunded.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+def start_qr_timeout(bot: telebot.TeleBot, qr_order_id: str, user_id: int):
+    threading.Timer(60.0, _qr_timeout, args=(bot, qr_order_id, user_id)).start()
 
 def _gate(bot, call):
     if not check_membership(bot, call.from_user.id):
@@ -252,6 +282,7 @@ def register(bot: telebot.TeleBot):
                 qty=actual_qty,
                 is_numerical=is_num,
             )
+            start_qr_timeout(bot, qr_order_id, call.from_user.id)
             qr_text = "📲 <b>Upload your UPI QR code</b> to complete the payment process.\n"
             reply_markup = purchase_success_qr_kb(qr_order_id)
         else:
