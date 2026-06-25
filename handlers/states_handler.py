@@ -144,6 +144,11 @@ def register(bot: telebot.TeleBot):
             _handle_broadcast(bot, message, html_text)
             return
 
+        # ── ADMIN: Cancel Order ──────────────────────────────────────
+        if action == "admin_cancel_order" and is_admin(user_id):
+            _handle_admin_cancel_order(bot, message, text)
+            return
+
         # ── ADMIN: Edit payment setting ──────────────────────────────
         if action == "admin_edit_setting" and is_admin(user_id):
             _handle_edit_setting(bot, message, state, text)
@@ -1251,6 +1256,92 @@ def _handle_buy_quantity(
         parse_mode="HTML",
         reply_markup=confirm_purchase_kb(product_id, qty),
     )
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  ADMIN: Cancel Order                                                 ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+def _handle_admin_cancel_order(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    text: str,
+):
+    user_id = message.from_user.id
+    order_id = text.strip()
+    
+    from bson.errors import InvalidId
+    from bson import ObjectId
+    from database import orders_col, qr_orders_col, stock_col
+    
+    try:
+        oid = ObjectId(order_id)
+    except InvalidId:
+        bot.send_message(user_id, "❌ Invalid Order ID format.", reply_markup=admin_panel_kb())
+        user_states.clear(user_id)
+        return
+        
+    order = orders_col.find_one({"_id": oid})
+    if not order:
+        qr_order = qr_orders_col.find_one({"_id": oid})
+        if qr_order and qr_order.get("order_id"):
+            try:
+                order = orders_col.find_one({"_id": ObjectId(qr_order["order_id"])})
+            except:
+                pass
+                
+    if not order:
+        bot.send_message(user_id, "❌ Order not found.", reply_markup=admin_panel_kb())
+        user_states.clear(user_id)
+        return
+        
+    buyer_id = order.get("user_id")
+    credits_used = order.get("credits_used", 0)
+    
+    if credits_used > 0 and buyer_id:
+        from database import add_credits
+        add_credits(buyer_id, credits_used)
+        
+    qr_order = qr_orders_col.find_one({"order_id": str(order["_id"])})
+    if qr_order:
+        from database import refund_stock
+        refund_stock(
+            product_id=qr_order.get("product_id"),
+            qty=qr_order.get("qty", 1),
+            is_numerical=qr_order.get("is_numerical", False),
+            items=qr_order.get("items", [])
+        )
+        qr_orders_col.update_one({"_id": qr_order["_id"]}, {"$set": {"status": "cancelled"}})
+    else:
+        items = order.get("items", [])
+        if items:
+            stock_col.update_many(
+                {"content": {"$in": items}},
+                {"$set": {"is_sold": False, "assigned_to": None, "assigned_at": None}}
+            )
+            
+    orders_col.delete_one({"_id": order["_id"]})
+    
+    bot.send_message(
+        user_id,
+        f"✅ <b>Order Cancelled</b>\n\n"
+        f"Order ID: <code>{order_id}</code>\n"
+        f"Refunded: <b>{credits_used}</b> credits to user {buyer_id}.",
+        parse_mode="HTML",
+        reply_markup=admin_panel_kb()
+    )
+    user_states.clear(user_id)
+    
+    try:
+        bot.send_message(
+            buyer_id,
+            f"❌ <b>Your Order has been Cancelled</b>\n\n"
+            f"Your order for <b>{order.get('product_name')}</b> was cancelled by an admin.\n"
+            f"<b>{credits_used}</b> credits have been refunded to your account.",
+            parse_mode="HTML"
+        )
+    except:
+        pass
+
 
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║  ADMIN: Broadcast                                                   ║

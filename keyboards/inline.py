@@ -196,6 +196,9 @@ def admin_panel_kb(is_maintenance: bool = False, is_referral: bool = True) -> In
         InlineKeyboardButton("📢 Send Announcement", callback_data="adm:broadcast"),
     )
     kb.add(
+        InlineKeyboardButton("❌ Cancel Order", callback_data="adm:cancel_order"),
+    )
+    kb.add(
         InlineKeyboardButton("⚙️ Payment Settings", callback_data="adm:payment_settings"),
         InlineKeyboardButton("📊 Statistics", callback_data="adm:stats"),
     )
