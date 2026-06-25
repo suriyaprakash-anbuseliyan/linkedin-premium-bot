@@ -1002,6 +1002,47 @@ def register(bot: telebot.TeleBot):
                 reply_markup=admin_back_kb(),
             )
             bot.answer_callback_query(call.id)
+            
+        elif action == "orders":
+            from database import get_user_orders
+            from utils.helpers import format_datetime
+            
+            orders = get_user_orders(target_id)
+            if not orders:
+                bot.edit_message_text(
+                    f"📜 <b>Orders for {target_id}</b>\n\n"
+                    "This user hasn't made any purchases yet.",
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    parse_mode="HTML",
+                    reply_markup=admin_user_actions_kb(target_id, user.get('is_banned', False)),
+                )
+                bot.answer_callback_query(call.id)
+                return
+                
+            lines = [f"📜 <b>Orders for {target_id}</b>\n"]
+            for i, order in enumerate(orders[:20], 1):  # show last 20
+                order_id = str(order['_id'])
+                order_text = (
+                    f"{i}. <b>{order['product_name']}</b>\n"
+                    f"   💎 Credits: {order['credits_used']}  •  "
+                    f"📅 {format_datetime(order.get('created_at'))}\n"
+                    f"   🆔 Order ID: <code>{order_id}</code>\n"
+                )
+                
+                if len("\n".join(lines)) + len(order_text) > 3900:
+                    lines.append("\n<i>... and older orders</i>")
+                    break
+                lines.append(order_text)
+                
+            bot.edit_message_text(
+                "\n".join(lines),
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=admin_user_actions_kb(target_id, user.get('is_banned', False)),
+            )
+            bot.answer_callback_query(call.id)
     # ╔══════════════════════════════════════════════════════════════════╗
     # ║  ADD / REMOVE CREDITS                                            ║
     # ╚══════════════════════════════════════════════════════════════════╝
