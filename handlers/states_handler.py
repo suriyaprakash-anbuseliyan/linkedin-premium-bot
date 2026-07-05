@@ -274,7 +274,8 @@ def register(bot: telebot.TeleBot):
 
         added, duplicates = 0, 0
         if valid_links:
-            added, duplicates = add_stock_items(product_id, valid_links)
+            allow_duplicates = state.get("allow_duplicates", False)
+            added, duplicates = add_stock_items(product_id, valid_links, allow_duplicates=allow_duplicates)
             
         broadcast_new_stock(bot, product_name, added, product_id)
 
@@ -739,6 +740,7 @@ def _handle_add_stock(
             "action": "admin_add_stock_multi",
             "product_id": product_id,
             "product_name": product_name,
+            "allow_duplicates": state.get("allow_duplicates", False),
             "accumulated_links": [],
         })
         bot.send_message(
@@ -775,7 +777,8 @@ def _handle_add_stock(
     # Add valid links to stock (returns added count and duplicate count)
     added, duplicates = 0, 0
     if valid_links:
-        added, duplicates = add_stock_items(product_id, valid_links)
+        allow_duplicates = state.get("allow_duplicates", False)
+        added, duplicates = add_stock_items(product_id, valid_links, allow_duplicates=allow_duplicates)
         
     broadcast_new_stock(bot, product_name, added, product_id)
 
@@ -850,7 +853,8 @@ def _handle_add_stock_multi(
 
         added, duplicates = 0, 0
         if valid_links:
-            added, duplicates = add_stock_items(product_id, valid_links)
+            allow_duplicates = state.get("allow_duplicates", False)
+            added, duplicates = add_stock_items(product_id, valid_links, allow_duplicates=allow_duplicates)
             
         broadcast_new_stock(bot, product_name, added, product_id)
 

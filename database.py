@@ -42,7 +42,11 @@ def ensure_indexes() -> None:
 
     stock_col.create_index([("product_id", ASCENDING), ("is_sold", ASCENDING)])
     stock_col.create_index([("product_id", ASCENDING)])
-    stock_col.create_index([("content", ASCENDING)], unique=True, sparse=True)
+    try:
+        stock_col.drop_index("content_1")
+    except Exception:
+        pass
+    stock_col.create_index([("content", ASCENDING)], sparse=True)
 
     gift_codes_col.create_index([("code", ASCENDING)], unique=True)
 
@@ -201,9 +205,9 @@ def get_existing_stock_links(links: list[str]) -> set[str]:
     return {doc["content"] for doc in existing_docs}
 
 
-def add_stock_items(product_id: str, links: list[str]) -> tuple[int, int]:
+def add_stock_items(product_id: str, links: list[str], allow_duplicates: bool = False) -> tuple[int, int]:
     """
-    Bulk-insert stock items for a product, skipping duplicates.
+    Bulk-insert stock items for a product, optionally skipping duplicates.
     Returns (count_inserted, count_duplicates).
     """
     from bson import ObjectId
@@ -221,9 +225,13 @@ def add_stock_items(product_id: str, links: list[str]) -> tuple[int, int]:
 
     # Filter out links that already exist in any product's stock
     stripped_links = [link.strip() for link in links if link.strip()]
-    existing = get_existing_stock_links(stripped_links)
-    new_links = [l for l in stripped_links if l not in existing]
-    duplicate_count = len(stripped_links) - len(new_links)
+    if allow_duplicates:
+        new_links = stripped_links
+        duplicate_count = 0
+    else:
+        existing = get_existing_stock_links(stripped_links)
+        new_links = [l for l in stripped_links if l not in existing]
+        duplicate_count = len(stripped_links) - len(new_links)
 
     docs = [
         {

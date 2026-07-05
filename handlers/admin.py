@@ -674,11 +674,14 @@ def register(bot: telebot.TeleBot):
         bot.answer_callback_query(call.id)
 
     # ── Bulk add stock ───────────────────────────────────────────────
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:addstock:"))
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:addstock:") or c.data.startswith("admprod:addstock_dup:"))
     def cb_add_stock(call: telebot.types.CallbackQuery):
         if not _admin_only(call):
             return
+        
+        allow_duplicates = call.data.startswith("admprod:addstock_dup:")
         pid = call.data.split(":")[2]
+        
         product = get_product(pid)
         if not product:
             bot.answer_callback_query(call.id, "Product not found.", show_alert=True)
@@ -687,7 +690,9 @@ def register(bot: telebot.TeleBot):
             "action": "admin_add_stock",
             "product_id": pid,
             "product_name": product["name"],
+            "allow_duplicates": allow_duplicates,
         })
+        dup_text = "⚠️ <b>Duplicate links WILL BE ADDED</b>." if allow_duplicates else "🔄 Duplicate links are automatically skipped."
         bot.edit_message_text(
             f"📦 <b>Add Stock — {product['name']}</b>\n\n"
             "<b>Option 1:</b> Paste links below, <b>one per line</b>.\n"
@@ -697,7 +702,7 @@ def register(bot: telebot.TeleBot):
             "4096-char limit).\n\n"
             "<b>Option 3:</b> Upload a <b>.csv</b> or <b>.txt</b> file\n"
             "containing your links.\n\n"
-            "🔄 Duplicate links are automatically skipped.\n\n"
+            f"{dup_text}\n\n"
             "Example:\n"
             "<code>https://example.com/link1\n"
             "PROMO-CODE-123\n"

@@ -418,6 +418,9 @@ def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: boo
             InlineKeyboardButton("💰 Edit Cost", callback_data=f"admprod:edit_cost:{product_id}"),
             InlineKeyboardButton("📦 Add Stock", callback_data=f"admprod:addstock:{product_id}"),
         )
+        kb.add(
+            InlineKeyboardButton("📦 Add Stock (Allow Dups)", callback_data=f"admprod:addstock_dup:{product_id}")
+        )
         kb.add(InlineKeyboardButton("🔁 Switch to Numerical", callback_data=f"admprod:toggle_numerical:{product_id}"))
         
     kb.add(
