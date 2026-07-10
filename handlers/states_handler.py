@@ -1054,36 +1054,36 @@ def _handle_admin_credits(
             user_id,
             f"User found: @{target.get('username', 'N/A')} "
             f"(current balance: ${target.get('wallet_balance', 0.0):.2f})\n\n"
-            f"Enter the number of credits to <b>{operation}</b>:",
+            f"Enter the amount of balance in USD to <b>{operation}</b>:",
             parse_mode="HTML",
             reply_markup=admin_back_kb(),
         )
 
     elif step == "amount":
         try:
-            amount = int(text)
+            amount = float(text)
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            bot.send_message(user_id, "❌ Please enter a valid positive integer.")
+            bot.send_message(user_id, "❌ Please enter a valid positive number.")
             return
 
         target_id = state["target_id"]
         if operation == "add":
             add_balance(target_id, amount)
-            action_text = f"➕ Added <b>{amount}</b> credits"
+            action_text = f"➕ Added <b>${amount:.2f}</b> to balance"
         else:
             remove_balance(target_id, amount)
-            action_text = f"➖ Removed <b>{amount}</b> credits"
+            action_text = f"➖ Removed <b>${amount:.2f}</b> from balance"
 
         user_states.clear(user_id)
-        logger.info("Admin %s credits: user=%s amount=%s", operation, target_id, amount)
+        logger.info("Admin %s balance: user=%s amount=%s", operation, target_id, amount)
         
         if operation == "add":
             u = get_user(target_id)
             if u:
                 from utils.helpers import announce_event
-                announce_event(bot, "CREDIT ADDED (ADMIN)", target_id, u["credits"], "Approved")
+                announce_event(bot, "FUNDS ADDED (ADMIN)", target_id, u.get("wallet_balance", 0.0), "Approved")
 
         bot.send_message(
             user_id,
@@ -1097,7 +1097,7 @@ def _handle_admin_credits(
             emoji = "➕" if operation == "add" else "➖"
             bot.send_message(
                 target_id,
-                f"{emoji} <b>{amount} credit(s)</b> have been "
+                f"{emoji} <b>${amount:.2f}</b> has been "
                 f"{'added to' if operation == 'add' else 'removed from'} your account by admin.",
                 parse_mode="HTML",
             )
