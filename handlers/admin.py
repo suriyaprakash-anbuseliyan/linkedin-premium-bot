@@ -10,7 +10,7 @@ from config import ADMIN_ID, logger
 from database import (
     get_all_products, get_product, update_product, delete_product, create_product,
     get_pending_payments, approve_payment, reject_payment,
-    add_credits, remove_credits, get_user, search_user_by_id, get_all_user_ids,
+    add_balance, remove_balance, get_user, search_user_by_id, get_all_user_ids,
     count_users, count_products, count_orders, count_payments, total_credits_sold,
     get_user_orders,
     get_available_stock_count, get_total_stock_count, add_stock_items, delete_product_stock,
@@ -1058,8 +1058,8 @@ def register(bot: telebot.TeleBot):
     # ╔══════════════════════════════════════════════════════════════════╗
     # ║  ADD / REMOVE CREDITS                                            ║
     # ╚══════════════════════════════════════════════════════════════════╝
-    @bot.callback_query_handler(func=lambda c: c.data == "adm:add_credits")
-    def cb_admin_add_credits(call: telebot.types.CallbackQuery):
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:add_balance")
+    def cb_admin_add_balance(call: telebot.types.CallbackQuery):
         if not _admin_only(call):
             return
         user_states.set(call.from_user.id, {
@@ -1077,8 +1077,8 @@ def register(bot: telebot.TeleBot):
         )
         bot.answer_callback_query(call.id)
 
-    @bot.callback_query_handler(func=lambda c: c.data == "adm:remove_credits")
-    def cb_admin_remove_credits(call: telebot.types.CallbackQuery):
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:remove_balance")
+    def cb_admin_remove_balance(call: telebot.types.CallbackQuery):
         if not _admin_only(call):
             return
         user_states.set(call.from_user.id, {
@@ -1450,7 +1450,7 @@ def register(bot: telebot.TeleBot):
         action = parts[1]  # approve, reject, reupload
         qr_order_id = parts[2]
 
-        from database import get_qr_order, update_qr_order_status, add_credits
+        from database import get_qr_order, update_qr_order_status, add_balance
 
         qr_order = get_qr_order(qr_order_id)
         if not qr_order:
@@ -1490,7 +1490,7 @@ def register(bot: telebot.TeleBot):
             # Refund credits to user
             credits_to_refund = qr_order.get("credits_used", 0)
             if credits_to_refund > 0:
-                add_credits(user_id, credits_to_refund)
+                add_balance(user_id, credits_to_refund)
                 
             # Refund stock to inventory
             from database import refund_stock

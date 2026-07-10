@@ -8,9 +8,9 @@ import telebot
 import threading
 from database import (
     get_active_products, get_product, get_user,
-    remove_credits, create_order,
+    remove_balance, create_order,
     get_available_stock_count, claim_stock_item,
-    create_qr_order, update_qr_order_status, add_credits, refund_stock
+    create_qr_order, update_qr_order_status, add_balance, refund_stock
 )
 from keyboards.inline import (
     products_list_kb, product_detail_kb, confirm_purchase_kb,
@@ -35,7 +35,7 @@ def _qr_timeout(bot: telebot.TeleBot, qr_order_id: str, user_id: int):
         update_qr_order_status(qr_order_id, "cancelled")
         credits_to_refund = qr_order.get("credits_used", 0)
         if credits_to_refund > 0:
-            add_credits(user_id, credits_to_refund)
+            add_balance(user_id, credits_to_refund)
             
         refund_stock(
             product_id=qr_order.get("product_id"),
@@ -608,7 +608,7 @@ def process_direct_pay_delivery(bot: telebot.TeleBot, user_id: int, product_id: 
                 claimed_items.append(item)
         if not claimed_items:
             # We took their money but out of stock! Refund to wallet
-            add_credits(user_id, amount_usd) # Wallet balance
+            add_balance(user_id, amount_usd) # Wallet balance
             bot.send_message(user_id, f"❌ Out of stock! We have credited <b>${amount_usd:.2f}</b> to your Wallet Balance.", parse_mode="HTML", reply_markup=back_to_menu_kb())
             return
             

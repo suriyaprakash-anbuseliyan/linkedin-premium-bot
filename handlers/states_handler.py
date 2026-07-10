@@ -18,7 +18,7 @@ import telebot
 from config import ADMIN_ID, logger
 from database import (
     create_payment, get_user, search_user_by_id,
-    add_credits, remove_credits, get_all_user_ids,
+    add_balance, remove_balance, get_all_user_ids,
     create_product, add_stock_items, set_setting,
 )
 from keyboards.inline import (
@@ -1058,10 +1058,10 @@ def _handle_admin_credits(
 
         target_id = state["target_id"]
         if operation == "add":
-            add_credits(target_id, amount)
+            add_balance(target_id, amount)
             action_text = f"➕ Added <b>{amount}</b> credits"
         else:
-            remove_credits(target_id, amount)
+            remove_balance(target_id, amount)
             action_text = f"➖ Removed <b>{amount}</b> credits"
 
         user_states.clear(user_id)
@@ -1349,8 +1349,8 @@ def _handle_admin_cancel_order(
     credits_used = order.get("credits_used", 0)
     
     if credits_used > 0 and buyer_id:
-        from database import add_credits
-        add_credits(buyer_id, credits_used)
+        from database import add_balance
+        add_balance(buyer_id, credits_used)
         
     qr_order = qr_orders_col.find_one({"order_id": str(order["_id"])})
     if qr_order:
