@@ -1068,7 +1068,7 @@ def register(bot: telebot.TeleBot):
             "step": "user_id",
         })
         bot.edit_message_text(
-            "➕ <b>Add Credits</b>\n\n"
+            "➕ <b>Add Balance</b>\n\n"
             "Enter the user's Telegram ID:",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
@@ -1087,7 +1087,7 @@ def register(bot: telebot.TeleBot):
             "step": "user_id",
         })
         bot.edit_message_text(
-            "➖ <b>Remove Credits</b>\n\n"
+            "➖ <b>Remove Balance</b>\n\n"
             "Enter the user's Telegram ID:",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,

@@ -32,7 +32,7 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(InlineKeyboardButton(**btn_config("menu_buy", "BUY", "🛒", "success"), callback_data="menu:buy"))
     kb.add(
-        InlineKeyboardButton(**btn_config("menu_credits", "Add Credits", "💰", "primary"), callback_data="menu:credits"),
+        InlineKeyboardButton(**btn_config("menu_credits", "Add Funds", "💰", "primary"), callback_data="menu:credits"),
         InlineKeyboardButton(**btn_config("menu_balance", "Balance", "💳"), callback_data="menu:balance"),
     )
     kb.add(
@@ -326,7 +326,7 @@ def admin_ui_button_list_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     buttons_to_edit = [
         ("menu_buy", "Main Menu: BUY"),
-        ("menu_credits", "Main Menu: Add Credits"),
+        ("menu_credits", "Main Menu: Add Funds"),
         ("menu_balance", "Main Menu: Balance"),
         ("menu_profile", "Main Menu: Profile"),
         ("menu_referral", "Main Menu: Refer/Earn"),

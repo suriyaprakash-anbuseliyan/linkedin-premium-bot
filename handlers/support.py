@@ -37,7 +37,7 @@ def register(bot: telebot.TeleBot):
             "📩 <b>Contact Admin:</b>\n"
             f"<a href='tg://user?id={ADMIN_ID}'>Click here to message admin</a>\n\n"
             "💡 <b>Common Questions:</b>\n"
-            "• <b>How to buy?</b> — Add credits → Buy product\n"
+            "• <b>How to buy?</b> — Add funds → Buy product\n"
             "• <b>Payment not approved?</b> — Allow up to 24h\n"
             "• <b>Wrong UTR/Order ID?</b> — Contact admin\n"
             "• <b>Referral not counted?</b> — Only new users count\n\n"
