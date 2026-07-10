@@ -10,7 +10,7 @@ Responsibilities:
 """
 
 import telebot
-from config import BOT_USERNAME, REFERRALS_PER_CREDIT, logger
+from config import BOT_USERNAME, logger
 from database import (
     get_user, register_user, get_user_by_referral_code,
     increment_referral_count, is_referral_enabled,

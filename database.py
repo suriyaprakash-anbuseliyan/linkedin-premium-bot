@@ -483,10 +483,13 @@ def set_referral_enabled(enabled: bool) -> None:
 def get_referral_config() -> dict:
     """
     Get referral conversion config from DB.
-    Falls back to config.py defaults if not set.
+    Falls back to defaults if not set.
     Returns: {"points_per_credit": int, "max_free_credits": int}
     """
-    from config import REFERRALS_PER_CREDIT, MAX_FREE_REFERRAL_CREDITS
+    # defaults
+    REFERRALS_PER_CREDIT = 5
+    MAX_FREE_REFERRAL_CREDITS = 100
+    
     doc = settings_col.find_one({"_id": "referral_config"})
     if doc:
         return {
