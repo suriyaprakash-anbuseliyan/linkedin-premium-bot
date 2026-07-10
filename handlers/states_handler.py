@@ -460,17 +460,23 @@ def _handle_payment_submission(
         if check_binance_order_exists(binance_order_id):
             bot.send_message(
                 user_id,
-                "❌ <b>Duplicate Order ID</b>\nThis transaction has already been processed.",
-                parse_mode="HTML",
-                reply_markup=back_to_menu_kb()
+                "❌ <b>Duplicate Order ID</b>\nThis transaction has already been processed.\n\nPlease enter a valid, unused Order ID.",
+                parse_mode="HTML"
             )
-            user_states.clear(user_id)
+            # Do NOT clear state, let them try again
             return
             
         bot.send_message(user_id, "⏳ Verifying Binance transaction automatically...")
         from utils.payments import verify_binance_pay_transaction
         if verify_binance_pay_transaction(binance_order_id, state.get("amount_usd", 0.0)):
             is_auto_verified = True
+        else:
+            bot.send_message(
+                user_id,
+                "❌ <b>Verification Failed</b>\nWe could not verify this Order ID or the amount is incorrect.\n\nPlease check and enter the correct Order ID.",
+                parse_mode="HTML"
+            )
+            return
             
     # Auto-verify BEP-20
     if state["method"] == "BEP-20" and bep20_tx_id:
@@ -478,17 +484,23 @@ def _handle_payment_submission(
         if check_binance_order_exists(bep20_tx_id): # reusing the same duplication check function for TxIDs
             bot.send_message(
                 user_id,
-                "❌ <b>Duplicate TxID</b>\nThis transaction has already been processed.",
-                parse_mode="HTML",
-                reply_markup=back_to_menu_kb()
+                "❌ <b>Duplicate TxID</b>\nThis transaction has already been processed.\n\nPlease enter a valid, unused Transaction ID (TxHash).",
+                parse_mode="HTML"
             )
-            user_states.clear(user_id)
+            # Do NOT clear state
             return
             
         bot.send_message(user_id, "⏳ Verifying BEP-20 transaction on BSC automatically...")
         from utils.payments import verify_bep20_deposit_transaction
         if verify_bep20_deposit_transaction(bep20_tx_id, state.get("amount_usd", 0.0)):
             is_auto_verified = True
+        else:
+            bot.send_message(
+                user_id,
+                "❌ <b>Verification Failed</b>\nWe could not verify this TxID or the amount is incorrect.\n\nPlease check and enter the correct Transaction ID (TxHash).",
+                parse_mode="HTML"
+            )
+            return
 
     payment_id = create_payment(
         user_id=user_id,
