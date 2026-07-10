@@ -50,7 +50,7 @@ def register(bot: telebot.TeleBot):
             
             order_text = (
                 f"{i}. <b>{order['product_name']}</b>\n"
-                f"   💎 Credits: {order['credits_used']}  •  "
+                f"   💰 Paid: ${order.get('price_paid_usd', 0.0):.2f}  •  "
                 f"📅 {format_datetime(order.get('created_at'))}\n"
                 f"   🆔 Order ID: <code>{order_id}</code>\n"
             )

@@ -1004,10 +1004,10 @@ def _handle_search_user(
         f"🆔 ID: <code>{user['user_id']}</code>\n"
         f"👤 Username: @{user.get('username', 'N/A')}\n"
         f"📛 Name: {user.get('first_name', 'N/A')}\n"
-        f"💎 Credits: {user['credits']}\n"
+        f"💵 Wallet Balance: ${user.get('wallet_balance', 0.0):.2f}\n"
         f"⭐ Points: {user.get('referral_points', 0)}\n"
         f"👥 Referrals: {user['referral_count']}\n"
-        f"🎁 Free Credits: {user['free_referral_credits']}\n"
+        f"🎁 Free Bonus: ${user.get('free_referral_bonus', 0.0):.2f}\n"
         f"🔗 Referred By: {user.get('referred_by', 'N/A')}\n"
         f"📅 Joined: {format_datetime(user.get('joined_at'))}"
     )
@@ -1053,7 +1053,7 @@ def _handle_admin_credits(
         bot.send_message(
             user_id,
             f"User found: @{target.get('username', 'N/A')} "
-            f"(current credits: {target['credits']})\n\n"
+            f"(current balance: ${target.get('wallet_balance', 0.0):.2f})\n\n"
             f"Enter the number of credits to <b>{operation}</b>:",
             parse_mode="HTML",
             reply_markup=admin_back_kb(),
@@ -1388,7 +1388,7 @@ def _handle_admin_cancel_order(
         user_id,
         f"✅ <b>Order Cancelled</b>\n\n"
         f"Order ID: <code>{order_id}</code>\n"
-        f"Refunded: <b>{credits_used}</b> credits to user {buyer_id}.",
+        f"Refunded: <b>${order.get('price_paid_usd', 0.0):.2f}</b> to user {buyer_id}.",
         parse_mode="HTML",
         reply_markup=admin_panel_kb()
     )
@@ -1399,7 +1399,7 @@ def _handle_admin_cancel_order(
             buyer_id,
             f"❌ <b>Your Order has been Cancelled</b>\n\n"
             f"Your order for <b>{order.get('product_name')}</b> was cancelled by an admin.\n"
-            f"<b>{credits_used}</b> credits have been refunded to your account.",
+            f"<b>${order.get('price_paid_usd', 0.0):.2f}</b> has been refunded to your wallet.",
             parse_mode="HTML"
         )
     except:
@@ -1486,7 +1486,7 @@ def _handle_admin_search_order(
         order_id = str(order['_id'])
         order_text = (
             f"{i}. <b>{order['product_name']}</b>\n"
-            f"   💎 Credits: {order['credits_used']}  •  "
+            f"   💰 Paid: ${order.get('price_paid_usd', 0.0):.2f}  •  "
             f"📅 {format_datetime(order.get('created_at'))}\n"
             f"   🆔 Order ID: <code>{order_id}</code>\n"
         )
