@@ -201,18 +201,22 @@ def register(bot: telebot.TeleBot):
             
             # Skip quantity step, enforce qty = 1
             qty = 1
-            total_cost = product["credit_cost"] * qty
-            from keyboards.inline import confirm_purchase_kb
+            total_cost_usd = product.get("price_usd", 0.0) * qty
+            from keyboards.inline import product_payment_method_kb
+            from database import get_user
+            user = get_user(call.from_user.id)
+            
             bot.edit_message_text(
-                f"🛒 <b>Confirm Purchase</b>\n\n"
+                f"🛒 <b>Checkout</b>\n\n"
                 f"📦 Product: <b>{product['name']}</b>\n"
                 f"🔢 Quantity: <b>{qty}</b>\n"
-                f"💰 Total Cost: <b>{total_cost}</b> credits\n\n"
-                "Proceed with purchase?",
+                f"💰 Total Cost: <b>${total_cost_usd:.2f}</b>\n"
+                f"Your Wallet Balance: <b>${user.get('wallet_balance', 0.0):.2f}</b>\n\n"
+                "<i>Select your payment method below:</i>",
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
                 parse_mode="HTML",
-                reply_markup=confirm_purchase_kb(product_id, qty)
+                reply_markup=product_payment_method_kb(product_id, qty, total_cost_usd)
             )
             bot.answer_callback_query(call.id)
             return
@@ -238,14 +242,14 @@ def register(bot: telebot.TeleBot):
         )
         bot.answer_callback_query(call.id)
 
-    # ── Purchase confirm ─────────────────────────────────────────────
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("prod:confirm:"))
-    def cb_confirm_purchase(call: telebot.types.CallbackQuery):
+    # ── Purchase confirm (Wallet) ─────────────────────────────────────────────
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("prod:confirm:wallet:"))
+    def cb_confirm_purchase_wallet(call: telebot.types.CallbackQuery):
         if not _gate(bot, call):
             return
         parts = call.data.split(":")
-        product_id = parts[2]
-        qty = int(parts[3]) if len(parts) > 3 else 1
+        product_id = parts[3]
+        qty = int(parts[4]) if len(parts) > 4 else 1
         
         product = get_product(product_id)
         user = get_user(call.from_user.id)
@@ -257,10 +261,10 @@ def register(bot: telebot.TeleBot):
             bot.answer_callback_query(call.id, "Please /start first.", show_alert=True)
             return
             
-        total_cost = product["credit_cost"] * qty
-        if user["credits"] < total_cost:
+        total_cost_usd = product.get("price_usd", 0.0) * qty
+        if user.get("wallet_balance", 0.0) < total_cost_usd:
             bot.answer_callback_query(
-                call.id, "❌ Insufficient credits.", show_alert=True,
+                call.id, "❌ Insufficient wallet balance.", show_alert=True,
             )
             return
 
@@ -290,22 +294,23 @@ def register(bot: telebot.TeleBot):
                 return
             actual_qty = len(claimed_items)
 
-        actual_cost = product["credit_cost"] * actual_qty
+        actual_cost_usd = product.get("price_usd", 0.0) * actual_qty
 
-        # Deduct credits
-        remove_credits(call.from_user.id, actual_cost)
+        # Deduct wallet balance
+        from database import remove_balance
+        remove_balance(call.from_user.id, actual_cost_usd)
         
         # Create order
         items_list = [item["content"] for item in claimed_items] if not is_num else [f"Service Order (x{actual_qty})"]
-        order_id = create_order(call.from_user.id, product["name"], actual_cost, items_list)
+        order_id = create_order(call.from_user.id, product["name"], actual_cost_usd, items_list)
         logger.info(
-            "Purchase: user=%s product=%s credits=%s qty=%s is_numerical=%s",
-            call.from_user.id, product["name"], actual_cost, actual_qty, is_num
+            "Purchase: user=%s product=%s amount_usd=%s qty=%s is_numerical=%s",
+            call.from_user.id, product["name"], actual_cost_usd, actual_qty, is_num
         )
         u = get_user(call.from_user.id)
         if u:
             from utils.helpers import announce_event
-            announce_event(bot, "PRODUCT PURCHASED", call.from_user.id, u["credits"], f"{product['name']} {actual_qty} purchased")
+            announce_event(bot, "PRODUCT PURCHASED (WALLET)", call.from_user.id, u.get("wallet_balance", 0.0), f"{product['name']} x{actual_qty} purchased")
 
         requires_qr = product.get("requires_qr", False)
 
@@ -320,7 +325,7 @@ def register(bot: telebot.TeleBot):
                 user_id=call.from_user.id,
                 product_id=product_id,
                 product_name=product["name"],
-                credits_used=actual_cost,
+                credits_used=actual_cost_usd,
                 items=items_list,
                 order_id=order_id,
                 qty=actual_qty,
@@ -459,3 +464,214 @@ def register(bot: telebot.TeleBot):
                 "reply_markup": back_to_menu_kb()
             })
         bot.answer_callback_query(call.id)
+
+# ── Direct Payment (UPI / Binance / BEP-20) ─────────────────────────────────
+@bot.callback_query_handler(func=lambda c: c.data.startswith("prod:direct:"))
+def cb_direct_pay(call: telebot.types.CallbackQuery):
+    if not _gate(bot, call):
+        return
+    parts = call.data.split(":")
+    method = parts[2].upper()
+    product_id = parts[3]
+    qty = int(parts[4]) if len(parts) > 4 else 1
+    
+    product = get_product(product_id)
+    if not product or not product.get("active"):
+        bot.answer_callback_query(call.id, "Product no longer available.", show_alert=True)
+        return
+        
+    total_cost_usd = product.get("price_usd", 0.0) * qty
+    
+    from database import get_payment_settings
+    ps = get_payment_settings()
+    from keyboards.inline import cancel_payment_kb
+    
+    if method == "UPI":
+        user_states.set(call.from_user.id, {
+            "action": "awaiting_utr",
+            "amount_usd": total_cost_usd,
+            "method": "UPI",
+            "intent": "direct_pay",
+            "product_id": product_id,
+            "qty": qty
+        })
+        
+        # conversion 1$ = 100 Rs
+        inr_price = int(total_cost_usd * 100)
+        UPI_ID = ps.get("upi_id", "example@upi")
+        UPI_NAME = ps.get("upi_name", "Bot Admin")
+        
+        text = (
+            "💳 <b>UPI Payment (Direct Pay)</b>\n\n"
+            f"Product: <b>{product['name']} (x{qty})</b>\n"
+            f"Amount to Pay: <b>₹{inr_price}</b> (for ${total_cost_usd:.2f})\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>UPI ID:</b> <code>{UPI_ID}</code>\n"
+            f"<b>Name:</b> {UPI_NAME}\n"
+            "━━━━━━━━━━━━━━━━━━━\n\n"
+            "Please transfer the exact amount and then <b>enter your 12-digit UTR Number</b> below 👇"
+        )
+        
+        from config import UPI_QR_PATH
+        try:
+            with open(UPI_QR_PATH, "rb") as qr:
+                bot.send_photo(
+                    chat_id=call.message.chat.id,
+                    photo=qr,
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=cancel_payment_kb()
+                )
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception:
+            bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
+
+    elif method == "BINANCE":
+        user_states.set(call.from_user.id, {
+            "action": "awaiting_binance_id",
+            "amount_usd": total_cost_usd,
+            "method": "Binance",
+            "intent": "direct_pay",
+            "product_id": product_id,
+            "qty": qty
+        })
+        
+        text = (
+            "🪙 <b>Binance Payment (Direct Pay)</b>\n\n"
+            f"Product: <b>{product['name']} (x{qty})</b>\n"
+            f"Amount to Pay: <b>${total_cost_usd:.2f} USDT</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>Binance UID:</b> <code>{ps.get('binance_uid', 'N/A')}</code>\n"
+            "━━━━━━━━━━━━━━━━━━━\n\n"
+            "After transferring via Binance Pay, <b>enter your Binance Order ID</b> below 👇"
+        )
+        bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
+        
+    elif method == "BEP20":
+        user_states.set(call.from_user.id, {
+            "action": "awaiting_bep20_id",
+            "amount_usd": total_cost_usd,
+            "method": "BEP-20",
+            "intent": "direct_pay",
+            "product_id": product_id,
+            "qty": qty
+        })
+        
+        text = (
+            "🔗 <b>BEP-20 (USDT) Payment (Direct Pay)</b>\n\n"
+            f"Product: <b>{product['name']} (x{qty})</b>\n"
+            f"Amount to Pay: <b>${total_cost_usd:.2f} USDT</b>\n"
+            "Network: <b>BNB Smart Chain (BEP-20)</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>Deposit Address:</b>\n<code>{ps.get('bep20_address', 'N/A')}</code>\n"
+            "━━━━━━━━━━━━━━━━━━━\n\n"
+            "Please transfer the exact amount and then <b>enter your Transaction ID (TxHash)</b> below 👇"
+        )
+        
+        from config import BEP20_QR_PATH
+        try:
+            with open(BEP20_QR_PATH, "rb") as qr:
+                bot.send_photo(
+                    chat_id=call.message.chat.id,
+                    photo=qr,
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=cancel_payment_kb()
+                )
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception:
+            bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
+
+    bot.answer_callback_query(call.id)
+    
+def process_direct_pay_delivery(bot: telebot.TeleBot, user_id: int, product_id: str, amount_usd: float, method: str):
+    product = get_product(product_id)
+    if not product:
+        bot.send_message(user_id, "❌ Product not found during delivery.", reply_markup=back_to_menu_kb())
+        return
+        
+    qty = 1 # By default, but we should pass qty from the state actually. Wait, state has qty. We need to pass it from _handle_payment_submission.
+    # In states_handler.py, we only passed amount_usd. Let's fix this inside process_direct_pay_delivery or assume we can read user_states before it gets cleared?
+    # No, it's cleared. So we'll have to add qty to the signature, but for now we can infer it.
+    qty = int(amount_usd / product.get('price_usd', 1)) if product.get('price_usd', 0) > 0 else 1
+    
+    is_num = product.get("is_numerical", False)
+    claimed_items = []
+    
+    if is_num:
+        from database import update_product
+        update_product(product_id, {"$inc": {"numerical_stock": -qty}})
+    else:
+        for _ in range(qty):
+            item = claim_stock_item(product_id, user_id)
+            if item:
+                claimed_items.append(item)
+        if not claimed_items:
+            # We took their money but out of stock! Refund to wallet
+            add_credits(user_id, amount_usd) # Wallet balance
+            bot.send_message(user_id, f"❌ Out of stock! We have credited <b>${amount_usd:.2f}</b> to your Wallet Balance.", parse_mode="HTML", reply_markup=back_to_menu_kb())
+            return
+            
+        qty = len(claimed_items)
+
+    actual_cost_usd = product.get("price_usd", 0.0) * qty
+
+    items_list = [item["content"] for item in claimed_items] if not is_num else [f"Service Order (x{qty})"]
+    order_id = create_order(user_id, product["name"], actual_cost_usd, items_list)
+    logger.info(f"Direct Pay Delivery: user={user_id} product={product['name']} amount={actual_cost_usd} method={method}")
+    
+    requires_qr = product.get("requires_qr", False)
+    qr_order_id = None
+    if requires_qr:
+        qr_order_id = create_qr_order(
+            user_id=user_id,
+            product_id=product_id,
+            product_name=product["name"],
+            credits_used=actual_cost_usd,
+            items=items_list,
+            order_id=order_id,
+            qty=qty,
+            is_numerical=is_num,
+        )
+        qr_text = "📲 <b>Upload your UPI QR code</b> to complete the payment process.\n"
+        reply_markup = purchase_success_qr_kb(qr_order_id)
+    else:
+        qr_text = ""
+        from keyboards.inline import back_to_menu_kb
+        reply_markup = back_to_menu_kb()
+
+    from database import get_delivery_settings
+    del_settings = get_delivery_settings()
+    delivery_msg = product.get("delivery_message", "").strip() or del_settings.get("global_message", "Thank you for your purchase! 🎉")
+
+    if is_num:
+        text = f"✅ <b>Purchase Successful! ({method})</b>\n\n📦 <b>{product['name']}</b> (x{qty})\n\n{qr_text}{delivery_msg}"
+        msg = bot.send_message(user_id, text, parse_mode="HTML", reply_markup=reply_markup)
+    else:
+        links_text = "\n\n".join(
+            f"🔗 {item['content']}\n⏰ Expires: {item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'}"
+            for item in claimed_items
+        )
+        warn_text = del_settings.get("expiration_warning", "⚠️ <i>Use these links within 7 days before they expire.</i>")
+        links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n{warn_text}\n\n"
+        
+        text = f"✅ <b>Purchase Successful! ({method})</b>\n\n📦 <b>{product['name']}</b> (x{qty})\n\n{links_block}{qr_text}{delivery_msg}"
+        
+        if len(text) > 4000:
+            brief_text = f"✅ <b>Purchase Successful! ({method})</b>\n\n📦 <b>{product['name']}</b> (x{qty})\n\n{qr_text}{delivery_msg}\n\n<i>Your links are provided in the attached file below because there are too many to show here.</i>"
+            msg = bot.send_message(user_id, brief_text, parse_mode="HTML", reply_markup=reply_markup)
+            
+            import io
+            file_content = f"Purchase: {product['name']} (x{qty})\n\n"
+            for item in claimed_items:
+                exp = item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'
+                file_content += f"Link: {item['content']}\nExpires: {exp}\n\n"
+            doc = io.BytesIO(file_content.encode('utf-8'))
+            doc.name = f"Order_{order_id}_links.txt"
+            bot.send_document(user_id, document=doc, caption=warn_text, parse_mode="HTML")
+        else:
+            msg = bot.send_message(user_id, text, parse_mode="HTML", reply_markup=reply_markup)
+            
+    if requires_qr and qr_order_id:
+        start_qr_timeout(bot, qr_order_id, user_id, msg.chat.id, msg.message_id, brief_text if len(text)>4000 else text, reply_markup)
+

@@ -54,10 +54,11 @@ REQUIRED_CHANNEL_LINK: str = os.getenv("REQUIRED_CHANNEL_LINK", "")
 # ── Payment details ─────────────────────────────────────────────────────
 UPI_ID: str = os.getenv("UPI_ID", "crackott@ybl")
 UPI_NAME: str = os.getenv("UPI_NAME", "SURIYAPRAKASH")
+UPI_QR_PATH: str = os.getenv("UPI_QR_PATH", "assets/upi_qr.jpg")
+USD_TO_INR_RATE: float = float(os.getenv("USD_TO_INR_RATE", "100.0"))
 BINANCE_UID: str = os.getenv("BINANCE_UID", "1097309535")
-
-RAZORPAY_KEY_ID: str = os.getenv("RAZORPAY_KEY_ID", "")
-RAZORPAY_KEY_SECRET: str = os.getenv("RAZORPAY_KEY_SECRET", "")
+BEP20_ADDRESS: str = os.getenv("BEP20_ADDRESS", "0xYourAddressHere")
+BEP20_QR_PATH: str = os.getenv("BEP20_QR_PATH", "assets/bep20_qr.jpg")
 
 BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")
@@ -65,23 +66,9 @@ BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")
 # ── Bot username (used for referral links) ───────────────────────────────
 BOT_USERNAME: str = os.getenv("BOT_USERNAME", "linkedinpremiumstore_bot")
 
-# ── Credit packages  (credits → price in INR for UPI / USDT for Binance) ─
-CREDIT_PACKAGES: dict[int, dict] = {
-    2:  {"inr": 106,  "usdt": 1.0},
-    4:  {"inr": 212,  "usdt": 2.0},
-    6:  {"inr": 318,  "usdt": 3.0},
-    8:  {"inr": 424,  "usdt": 4.0},
-    10: {"inr": 530,  "usdt": 5.0},
-    12: {"inr": 636,  "usdt": 6.0},
-    14: {"inr": 742,  "usdt": 7.0},
-    16: {"inr": 848,  "usdt": 8.0},
-    18: {"inr": 954,  "usdt": 9.0},
-    20: {"inr": 1060, "usdt": 10.0},
-}
-
 # ── Referral settings ───────────────────────────────────────────────────
-REFERRALS_PER_CREDIT: int = 3          # every N referrals → +1 credit
-MAX_FREE_REFERRAL_CREDITS: int = 10    # cap on free credits from referrals
+REFERRAL_BONUS_USD: float = float(os.getenv("REFERRAL_BONUS_USD", "0.5"))
+MAX_REFERRAL_BONUS_USD: float = float(os.getenv("MAX_REFERRAL_BONUS_USD", "5.0"))
 
 # ── Database name ────────────────────────────────────────────────────────
 DB_NAME: str = os.getenv("DB_NAME", "linkedin_premium_bot")

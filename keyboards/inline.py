@@ -99,6 +99,30 @@ def product_detail_kb(product_id: str) -> InlineKeyboardMarkup:
     return kb
 
 
+def product_payment_method_kb(product_id: str, qty: int, price_usd: float) -> InlineKeyboardMarkup:
+    from database import get_payment_settings
+    settings = get_payment_settings()
+    
+    kb = InlineKeyboardMarkup(row_width=1)
+    
+    # Wallet Pay option
+    kb.add(InlineKeyboardButton("💰 Pay via Wallet", callback_data=f"prod:confirm:wallet:{product_id}:{qty}"))
+    
+    # Direct Pay options
+    buttons = []
+    if settings.get("upi_enabled", True):
+        buttons.append(InlineKeyboardButton("💳 Direct UPI", callback_data=f"prod:direct:upi:{product_id}:{qty}"))
+    if settings.get("binance_enabled", True):
+        buttons.append(InlineKeyboardButton("🪙 Direct Binance", callback_data=f"prod:direct:binance:{product_id}:{qty}"))
+    if settings.get("bep20_enabled", True):
+        buttons.append(InlineKeyboardButton("🔗 Direct BEP-20", callback_data=f"prod:direct:bep20:{product_id}:{qty}"))
+        
+    for i in range(0, len(buttons), 2):
+        kb.add(*buttons[i:i+2])
+        
+    kb.add(InlineKeyboardButton(**btn_config("prod_cancel", "Cancel", "❌", "danger"), callback_data="menu:buy"))
+    return kb
+
 def confirm_purchase_kb(product_id: str, qty: int = 1) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
@@ -136,27 +160,29 @@ def admin_qr_review_kb(qr_order_id: str) -> InlineKeyboardMarkup:
 
 
 
-def payment_method_kb(credits_qty: int) -> InlineKeyboardMarkup:
+def payment_method_kb(amount_usd: float) -> InlineKeyboardMarkup:
     from database import get_payment_settings
     settings = get_payment_settings()
     
     kb = InlineKeyboardMarkup(row_width=2)
     buttons = []
     if settings.get("upi_enabled", True):
-        buttons.append(InlineKeyboardButton("💳 UPI", callback_data=f"pay:upi:{credits_qty}"))
+        buttons.append(InlineKeyboardButton("💳 UPI", callback_data=f"pay:upi:{amount_usd}"))
     if settings.get("binance_enabled", True):
-        buttons.append(InlineKeyboardButton("🪙 Binance (Recommended)", callback_data=f"pay:binance:{credits_qty}"))
+        buttons.append(InlineKeyboardButton("🪙 Binance (Recommended)", callback_data=f"pay:binance:{amount_usd}"))
+    if settings.get("bep20_enabled", True):
+        buttons.append(InlineKeyboardButton("🔗 BEP-20 (USDT)", callback_data=f"pay:bep20:{amount_usd}"))
     
     if buttons:
         kb.add(*buttons)
         
-    kb.add(InlineKeyboardButton("🔙 Back", callback_data="menu:credits"))
+    kb.add(InlineKeyboardButton("🔙 Back", callback_data="menu:wallet_add"))
     return kb
 
 
 def cancel_payment_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("❌ Cancel", callback_data="menu:credits"))
+    kb.add(InlineKeyboardButton("❌ Cancel", callback_data="menu:main"))
     return kb
 
 
@@ -189,10 +215,10 @@ def admin_panel_kb(is_maintenance: bool = False, is_referral: bool = True) -> In
     )
     kb.add(
         InlineKeyboardButton("👥 Users", callback_data="adm:users"),
-        InlineKeyboardButton("➕ Add Credits", callback_data="adm:add_credits"),
+        InlineKeyboardButton("➕ Add Balance", callback_data="adm:add_balance"),
     )
     kb.add(
-        InlineKeyboardButton("➖ Remove Credits", callback_data="adm:remove_credits"),
+        InlineKeyboardButton("➖ Remove Balance", callback_data="adm:remove_balance"),
         InlineKeyboardButton("📢 Send Announcement", callback_data="adm:broadcast"),
     )
     kb.add(
@@ -233,15 +259,28 @@ def payment_settings_kb() -> InlineKeyboardMarkup:
     
     upi_status = "🟢 ON" if settings.get("upi_enabled", True) else "🔴 OFF"
     binance_status = "🟢 ON" if settings.get("binance_enabled", True) else "🔴 OFF"
+    bep20_status = "🟢 ON" if settings.get("bep20_enabled", True) else "🔴 OFF"
     
     kb.add(
         InlineKeyboardButton(f"💳 UPI: {upi_status}", callback_data="admset:toggle_upi"),
         InlineKeyboardButton(f"🪙 Binance: {binance_status}", callback_data="admset:toggle_binance")
     )
     kb.add(
+        InlineKeyboardButton(f"🔗 BEP-20: {bep20_status}", callback_data="admset:toggle_bep20")
+    )
+    kb.add(
         InlineKeyboardButton("💳 Edit UPI ID", callback_data="admset:upi_id"),
         InlineKeyboardButton("👤 Edit UPI Name", callback_data="admset:upi_name"),
+    )
+    kb.add(
+        InlineKeyboardButton("🖼 Upload UPI QR", callback_data="admset:upload_upi_qr"),
+    )
+    kb.add(
         InlineKeyboardButton("🪙 Edit Binance UID", callback_data="admset:binance_uid"),
+        InlineKeyboardButton("🔗 Edit BEP-20 Address", callback_data="admset:bep20_address"),
+    )
+    kb.add(
+        InlineKeyboardButton("🖼 Upload BEP-20 QR", callback_data="admset:upload_bep20_qr"),
     )
     kb.add(InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"))
     return kb

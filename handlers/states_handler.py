@@ -61,7 +61,7 @@ def broadcast_new_stock(bot: telebot.TeleBot, product_name: str, added_count: in
 
 def register(bot: telebot.TeleBot):
 
-    @bot.message_handler(func=lambda m: user_states.has(m.from_user.id))
+    @bot.message_handler(content_types=['text', 'photo', 'document'], func=lambda m: user_states.has(m.from_user.id))
     def handle_state_input(message: telebot.types.Message):
         user_id = message.from_user.id
         try:
@@ -73,6 +73,17 @@ def register(bot: telebot.TeleBot):
             return
 
         action = state.get("action")
+        
+        # ── ADMIN UPLOAD QR CODE ─────────────────────────────────────
+        if action == "admin_upload_qr" and is_admin(user_id):
+            _handle_admin_upload_qr(bot, message, state)
+            return
+            
+        # Ensure we only process text for all other states
+        if message.content_type != 'text':
+            bot.send_message(user_id, "❌ Please send text.")
+            return
+            
         text = message.text.strip() if message.text else ""
         html_text = getattr(message, 'html_text', message.text or "").strip()
 
@@ -85,10 +96,15 @@ def register(bot: telebot.TeleBot):
         if action == "awaiting_binance_id":
             _handle_payment_submission(bot, message, state, binance_order_id=text)
             return
+            
+        # ── PAYMENT: BEP-20 TxID ─────────────────────────────────────
+        if action == "awaiting_bep20_id":
+            _handle_payment_submission(bot, message, state, bep20_tx_id=text)
+            return
 
-        # ── CREDIT PURCHASE: Enter Amount ────────────────────────────
-        if action == "awaiting_credit_amount":
-            _handle_credit_amount_input(bot, message, text)
+        # ── WALLET: Enter Topup Amount ────────────────────────────
+        if action == "awaiting_topup_amount":
+            _handle_topup_amount_input(bot, message, text)
             return
 
         # ── REDEEM GIFT CODE ─────────────────────────────────────────
@@ -397,21 +413,17 @@ def register(bot: telebot.TeleBot):
 # ║  CREDIT AMOUNT submission                                           ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def _handle_credit_amount_input(bot: telebot.TeleBot, message: telebot.types.Message, text: str):
+def _handle_topup_amount_input(bot: telebot.TeleBot, message: telebot.types.Message, text: str):
     user_id = message.from_user.id
     try:
-        credits_qty = int(text)
+        amount_usd = float(text)
     except ValueError:
-        bot.send_message(user_id, "❌ Please enter a valid number.")
+        bot.send_message(user_id, "❌ Please enter a valid number (e.g. 5 or 5.50).")
         return
 
-    if credits_qty < 2:
-        bot.send_message(user_id, "❌ Minimum purchase is 2 credits.")
+    if amount_usd < 1.0:
+        bot.send_message(user_id, "❌ Minimum top-up is $1.00.")
         return
-
-    # Calculate prices based on 2 credits = ₹106 / $1
-    inr_price = credits_qty * 53
-    usdt_price = credits_qty * 0.5
 
     user_states.clear(user_id)
     
@@ -419,11 +431,10 @@ def _handle_credit_amount_input(bot: telebot.TeleBot, message: telebot.types.Mes
     bot.send_message(
         user_id,
         f"💳 <b>Select Payment Method</b>\n\n"
-        f"You are purchasing <b>{credits_qty}</b> credits.\n"
-        f"Price: <b>${usdt_price}</b> (or <b>₹{inr_price}</b>)\n\n"
+        f"You are adding <b>${amount_usd:.2f}</b> to your wallet.\n\n"
         "Please select your preferred payment method below:",
         parse_mode="HTML",
-        reply_markup=payment_method_kb(credits_qty),
+        reply_markup=payment_method_kb(amount_usd),
     )
 
 
@@ -437,6 +448,7 @@ def _handle_payment_submission(
     state: dict,
     utr_number: str | None = None,
     binance_order_id: str | None = None,
+    bep20_tx_id: str | None = None,
 ):
     user_id = message.from_user.id
     username = message.from_user.username or ""
@@ -457,51 +469,90 @@ def _handle_payment_submission(
             
         bot.send_message(user_id, "⏳ Verifying Binance transaction automatically...")
         from utils.payments import verify_binance_pay_transaction
-        expected_note = state.get("expected_note", "")
-        if verify_binance_pay_transaction(binance_order_id, state["amount"], expected_note):
+        if verify_binance_pay_transaction(binance_order_id, state.get("amount_usd", 0.0)):
+            is_auto_verified = True
+            
+    # Auto-verify BEP-20
+    if state["method"] == "BEP-20" and bep20_tx_id:
+        from database import check_binance_order_exists
+        if check_binance_order_exists(bep20_tx_id): # reusing the same duplication check function for TxIDs
+            bot.send_message(
+                user_id,
+                "❌ <b>Duplicate TxID</b>\nThis transaction has already been processed.",
+                parse_mode="HTML",
+                reply_markup=back_to_menu_kb()
+            )
+            user_states.clear(user_id)
+            return
+            
+        bot.send_message(user_id, "⏳ Verifying BEP-20 transaction on BSC automatically...")
+        from utils.payments import verify_bep20_deposit_transaction
+        if verify_bep20_deposit_transaction(bep20_tx_id, state.get("amount_usd", 0.0)):
             is_auto_verified = True
 
     payment_id = create_payment(
         user_id=user_id,
         username=username,
         method=state["method"],
-        amount=state["amount"],
-        credits=state["credits"],
+        amount_usd=state.get("amount_usd", 0.0),
+        intent=state.get("intent", "add_to_wallet"),
+        product_id=state.get("product_id"),
         utr_number=utr_number,
-        binance_order_id=binance_order_id,
+        binance_order_id=binance_order_id or bep20_tx_id, # store TxID here for duplication prevention
     )
     user_states.clear(user_id)
     logger.info(
-        "Payment submitted: user=%s method=%s credits=%s payment_id=%s auto_verified=%s",
-        user_id, state["method"], state["credits"], payment_id, is_auto_verified
+        "Payment submitted: user=%s method=%s amount_usd=%s payment_id=%s auto_verified=%s",
+        user_id, state["method"], state.get("amount_usd"), payment_id, is_auto_verified
     )
 
     if is_auto_verified:
-        from database import approve_payment, add_credits
+        from database import approve_payment, add_balance
         from utils.helpers import announce_event
         
         approve_payment(str(payment_id))
-        add_credits(user_id, state["credits"])
-        announce_event(bot, f"CREDIT ADDED ({state['method'].upper()})", user_id, state["credits"], "Auto-Approved")
+        intent = state.get("intent", "add_to_wallet")
         
-        bot.send_message(
-            user_id,
-            "✅ <b>Payment Verified Automatically!</b>\n\n"
-            f"💎 <b>{state['credits']} credit(s)</b> have been added to your account.",
-            parse_mode="HTML",
-            reply_markup=back_to_menu_kb(),
-        )
-        
-        # Notify admin of auto-approval
-        admin_text = (
-            "✅ <b>Auto-Approved Payment</b>\n\n"
-            f"👤 User ID: <code>{user_id}</code>\n"
-            f"👤 Username: @{username}\n"
-            f"💰 Method: {state['method']}\n"
-            f"💵 Amount: {state['amount']}\n"
-            f"💎 Credits: {state['credits']}\n"
-            f"🔢 Order ID: <code>{binance_order_id}</code>"
-        )
+        if intent == "add_to_wallet":
+            add_balance(user_id, state.get("amount_usd", 0.0))
+            
+            from database import get_user
+            u = get_user(user_id)
+            if u:
+                announce_event(bot, f"WALLET ADDED ({state['method'].upper()})", user_id, u.get("wallet_balance", 0.0), "Auto-Approved")
+            
+            bot.send_message(
+                user_id,
+                "✅ <b>Payment Verified Automatically!</b>\n\n"
+                f"💵 <b>${state.get('amount_usd', 0.0):.2f}</b> has been added to your wallet.",
+                parse_mode="HTML",
+                reply_markup=back_to_menu_kb(),
+            )
+            
+            # Notify admin of auto-approval
+            admin_text = (
+                "✅ <b>Auto-Approved Top-up</b>\n\n"
+                f"👤 User ID: <code>{user_id}</code>\n"
+                f"👤 Username: @{username}\n"
+                f"💰 Method: {state['method']}\n"
+                f"💵 Amount: ${state.get('amount_usd', 0.0):.2f}\n"
+                f"🔢 Order ID: <code>{binance_order_id}</code>"
+            )
+        elif intent == "direct_pay_product":
+            # For direct pay, deliver the product directly
+            from handlers.products import process_direct_pay_delivery
+            process_direct_pay_delivery(bot, user_id, state.get("product_id"), state.get("amount_usd", 0.0), state["method"])
+            
+            # Notify admin of auto-approval
+            txn = binance_order_id or bep20_tx_id or "N/A"
+            admin_text = (
+                "✅ <b>Auto-Approved Direct Pay</b>\n\n"
+                f"👤 User ID: <code>{user_id}</code>\n"
+                f"👤 Username: @{username}\n"
+                f"💰 Method: {state['method']}\n"
+                f"💵 Amount: ${state.get('amount_usd', 0.0):.2f}\n"
+                f"🔢 Order/TxID: <code>{txn}</code>"
+            )
         try:
             bot.send_message(ADMIN_ID, admin_text, parse_mode="HTML")
         except Exception:
@@ -512,21 +563,21 @@ def _handle_payment_submission(
     bot.send_message(
         user_id,
         "✅ <b>Payment submitted successfully!</b>\n\n"
-        "We could not verify it automatically. Your credits will be added shortly after manual review.",
+        "Your payment has been sent for manual review. If approved, your product will be delivered or wallet funded shortly.",
         parse_mode="HTML",
         reply_markup=back_to_menu_kb(),
     )
 
     # Notify admin
-    txn = utr_number or binance_order_id or "N/A"
-    txn_label = "UTR Number" if state["method"] == "UPI" else "Binance Order ID"
+    txn = utr_number or binance_order_id or bep20_tx_id or "N/A"
+    txn_label = "UTR Number" if state["method"] == "UPI" else ("TxID" if state["method"] == "BEP-20" else "Binance Order ID")
     admin_text = (
         "🔔 <b>New Payment Request (Needs Review)</b>\n\n"
         f"👤 User ID: <code>{user_id}</code>\n"
         f"👤 Username: @{username}\n"
         f"💰 Method: {state['method']}\n"
-        f"💵 Amount: {state['amount']}\n"
-        f"💎 Credits: {state['credits']}\n"
+        f"💵 Amount: ${state.get('amount_usd', 0.0):.2f}\n"
+        f"🏷 Intent: {state.get('intent', 'add_to_wallet')}\n"
         f"🔢 {txn_label}: <code>{txn}</code>"
     )
     try:
@@ -1232,38 +1283,29 @@ def _handle_buy_quantity(
         return
 
     user = get_user(user_id)
-    total_cost = product["credit_cost"] * qty
+    total_cost_usd = product.get("price_usd", 0.0) * qty
 
-    if user["credits"] < total_cost:
-        bot.send_message(
-            user_id,
-            f"❌ Insufficient credits.\n"
-            f"You need {total_cost} credits for {qty} link(s), but you have {user['credits']}.\n"
-            f"Please add more credits.",
-            reply_markup=telebot.types.InlineKeyboardMarkup().add(
-                telebot.types.InlineKeyboardButton("🔙 Back to Buy Menu", callback_data="menu:buy")
-            )
-        )
-        user_states.clear(user_id)
-        return
+    # We do not strictly check for balance here because they can use Direct Pay
+    # The actual balance check will happen if they choose "Pay via Wallet"
 
     user_states.clear(user_id)
+    
+    from keyboards.inline import product_payment_method_kb
 
     text_msg = (
-        f"⚠️ <b>Confirm Purchase</b>\n\n"
+        f"🛒 <b>Checkout</b>\n\n"
         f"Product: <b>{product['name']}</b>\n"
-        f"Quantity: <b>{qty} link(s)</b>\n"
-        f"Total Cost: <b>{total_cost} credit(s)</b>\n"
-        f"Your balance: <b>{user['credits']} credit(s)</b>\n\n"
-        f"Proceed?"
+        f"Quantity: <b>{qty}</b>\n"
+        f"Total Cost: <b>${total_cost_usd:.2f}</b>\n"
+        f"Your Wallet Balance: <b>${user.get('wallet_balance', 0.0):.2f}</b>\n\n"
+        f"<i>Select your payment method below:</i>"
     )
-    # We will encode quantity into the callback data: prod:confirm:{product_id}:{qty}
-    # Need to make sure confirm_purchase_kb accepts qty
+    
     bot.send_message(
         user_id,
         text_msg,
         parse_mode="HTML",
-        reply_markup=confirm_purchase_kb(product_id, qty),
+        reply_markup=product_payment_method_kb(product_id, qty, total_cost_usd),
     )
 
 # ╔══════════════════════════════════════════════════════════════════════╗
@@ -1868,3 +1910,46 @@ def _handle_download_order(
         reply_markup=back_to_menu_kb()
     )
     user_states.clear(user_id)
+
+def _handle_admin_upload_qr(bot: telebot.TeleBot, message: telebot.types.Message, state: dict):
+    user_id = message.from_user.id
+    qr_type = state.get("qr_type", "UPI")
+    
+    if message.content_type not in ['photo', 'document']:
+        bot.send_message(user_id, "❌ Please send an image (Photo or Document).")
+        return
+        
+    try:
+        # Get file id
+        if message.content_type == 'photo':
+            file_id = message.photo[-1].file_id
+        else:
+            file_id = message.document.file_id
+            
+        file_info = bot.get_file(file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        
+        # Save based on type
+        from config import UPI_QR_PATH, BEP20_QR_PATH
+        import os
+        
+        save_path = UPI_QR_PATH if qr_type == "UPI" else BEP20_QR_PATH
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
+        with open(save_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
+            
+        user_states.clear(user_id)
+        
+        from keyboards.inline import payment_settings_kb
+        bot.send_message(
+            user_id,
+            f"✅ <b>{qr_type} QR Code uploaded and saved successfully!</b>",
+            parse_mode="HTML",
+            reply_markup=payment_settings_kb()
+        )
+    except Exception as e:
+        logger.error(f"Error saving QR code: {e}")
+        bot.send_message(user_id, "❌ Failed to save QR code. Please try again or check the logs.")

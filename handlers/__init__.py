@@ -8,7 +8,7 @@ Import order matters: general handlers first, then specific ones.
 from handlers.start import register as register_start
 from handlers.menu import register as register_menu
 from handlers.products import register as register_products
-from handlers.credits import register as register_credits
+from handlers.wallet import register as register_wallet
 from handlers.profile import register as register_profile
 from handlers.referral import register as register_referral
 from handlers.orders import register as register_orders
@@ -23,7 +23,7 @@ def register_all_handlers(bot) -> None:
     register_start(bot)
     register_menu(bot)
     register_products(bot)
-    register_credits(bot)
+    register_wallet(bot)
     register_profile(bot)
     register_referral(bot)
     register_orders(bot)

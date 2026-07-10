@@ -773,17 +773,36 @@ def register(bot: telebot.TeleBot):
             bot.answer_callback_query(call.id, "Payment not found.", show_alert=True)
             return
 
-        # Add credits to user
-        add_credits(payment["user_id"], payment["credits"])
-        logger.info(
-            "Payment approved: user=%s credits=%s by admin",
-            payment["user_id"], payment["credits"],
-        )
-        from database import get_user
-        user = get_user(payment["user_id"])
-        if user:
-            from utils.helpers import announce_event
-            announce_event(bot, "CREDIT ADDED (PURCHASE)", payment["user_id"], user["credits"], "Approved")
+        user_id = payment["user_id"]
+        amount_usd = payment.get("amount_usd", 0.0)
+        intent = payment.get("intent", "add_to_wallet")
+
+        if intent == "add_to_wallet":
+            from database import add_balance
+            add_balance(user_id, amount_usd)
+            logger.info("Payment approved (Wallet): user=%s amount_usd=%s by admin", user_id, amount_usd)
+            
+            from database import get_user
+            user = get_user(user_id)
+            if user:
+                from utils.helpers import announce_event
+                announce_event(bot, "WALLET ADDED (MANUAL)", user_id, user.get("wallet_balance", 0.0), "Approved by admin")
+
+            try:
+                bot.send_message(
+                    user_id,
+                    "✅ <b>Payment Approved!</b>\n\n"
+                    f"💵 <b>${amount_usd:.2f}</b> added to your wallet successfully.\n"
+                    "Thank you! 🎉",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+        
+        elif intent == "direct_pay":
+            from handlers.products import process_direct_pay_delivery
+            logger.info("Payment approved (Direct Pay): user=%s amount_usd=%s by admin", user_id, amount_usd)
+            process_direct_pay_delivery(bot, user_id, payment.get("product_id"), amount_usd, payment.get("method", "Manual"))
 
         # Update admin message
         bot.edit_message_text(
@@ -792,18 +811,6 @@ def register(bot: telebot.TeleBot):
             message_id=call.message.message_id,
             parse_mode="HTML",
         )
-
-        # Notify user
-        try:
-            bot.send_message(
-                payment["user_id"],
-                "✅ <b>Payment Approved!</b>\n\n"
-                f"💎 <b>{payment['credits']} credit(s)</b> added successfully.\n"
-                "Thank you! 🎉",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
         bot.answer_callback_query(call.id, "✅ Approved")
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("admpay:reject:"))
@@ -1231,7 +1238,42 @@ def register(bot: telebot.TeleBot):
         bot.answer_callback_query(call.id, f"Binance Payment {'Enabled' if new_val else 'Disabled'}", show_alert=True)
         cb_payment_settings(call)
 
-
+    @bot.callback_query_handler(func=lambda c: c.data == "admset:toggle_bep20")
+    def cb_toggle_bep20(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        ps = get_payment_settings()
+        new_val = not ps.get("bep20_enabled", True)
+        from database import settings_col
+        settings_col.update_one(
+            {"_id": "payment_settings"},
+            {"$set": {"bep20_enabled": new_val}},
+            upsert=True
+        )
+        bot.answer_callback_query(call.id, f"BEP-20 Payment {'Enabled' if new_val else 'Disabled'}", show_alert=True)
+        cb_payment_settings(call)
+        
+    @bot.callback_query_handler(func=lambda c: c.data in ["admset:upload_upi_qr", "admset:upload_bep20_qr"])
+    def cb_upload_qr(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        
+        qr_type = "UPI" if "upi" in call.data else "BEP-20"
+        
+        user_states.set(call.from_user.id, {
+            "action": "admin_upload_qr",
+            "qr_type": qr_type,
+        })
+        
+        bot.edit_message_text(
+            f"🖼 <b>Upload {qr_type} QR Code</b>\n\n"
+            "Please send the QR code image now as a <b>Photo</b>.",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=admin_back_kb(),
+        )
+        bot.answer_callback_query(call.id)
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("admset:"))
     def cb_edit_setting(call: telebot.types.CallbackQuery):
@@ -1260,6 +1302,7 @@ def register(bot: telebot.TeleBot):
                 "upi_id": "💳 UPI ID",
                 "upi_name": "👤 UPI Name",
                 "binance_uid": "🪙 Binance UID",
+                "bep20_address": "🔗 BEP-20 Address",
             }
             label = labels.get(setting_key, setting_key)
             ps = get_payment_settings()

@@ -72,12 +72,12 @@ def register_user(user_id: int, username: str, first_name: str,
         "user_id": user_id,
         "username": username or "",
         "first_name": first_name or "",
-        "credits": 0,
+        "wallet_balance": 0.0,
         "referral_code": referral_code,
         "referred_by": referred_by,
         "referral_count": 0,
         "referral_points": 1 if is_welcome_bonus_enabled() else 0,
-        "free_referral_credits": 0,
+        "free_referral_bonus": 0.0,
         "joined_at": datetime.now(timezone.utc),
     }
     users_col.insert_one(doc)
@@ -88,12 +88,12 @@ def update_user(user_id: int, update: dict) -> None:
     users_col.update_one({"user_id": user_id}, update)
 
 
-def add_credits(user_id: int, amount: int) -> None:
-    users_col.update_one({"user_id": user_id}, {"$inc": {"credits": amount}})
+def add_balance(user_id: int, amount: float) -> None:
+    users_col.update_one({"user_id": user_id}, {"$inc": {"wallet_balance": float(amount)}})
 
 
-def remove_credits(user_id: int, amount: int) -> None:
-    users_col.update_one({"user_id": user_id}, {"$inc": {"credits": -amount}})
+def remove_balance(user_id: int, amount: float) -> None:
+    users_col.update_one({"user_id": user_id}, {"$inc": {"wallet_balance": -float(amount)}})
 
 
 def increment_referral_count(user_id: int) -> dict | None:
@@ -105,14 +105,14 @@ def increment_referral_count(user_id: int) -> dict | None:
     )
 
 
-def redeem_referral_points(user_id: int, points_cost: int) -> bool:
+def redeem_referral_points(user_id: int, points_cost: int, bonus_usd: float) -> bool:
     """
-    Atomically deduct points_cost and add 1 credit.
+    Atomically deduct points_cost and add bonus_usd to wallet.
     Returns True if successful, False if insufficient points.
     """
     result = users_col.update_one(
         {"user_id": user_id, "referral_points": {"$gte": points_cost}},
-        {"$inc": {"credits": 1, "free_referral_credits": 1, "referral_points": -points_cost}},
+        {"$inc": {"wallet_balance": bonus_usd, "free_referral_bonus": bonus_usd, "referral_points": -points_cost}},
     )
     return result.modified_count > 0
 
@@ -148,12 +148,12 @@ def delete_user(user_id: int) -> None:
 # ║  PRODUCT helpers                                                    ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def create_product(name: str, description: str, credit_cost: int, is_numerical: bool = False, numerical_stock: int = 0, requires_qr: bool = False) -> str:
+def create_product(name: str, description: str, price_usd: float, is_numerical: bool = False, numerical_stock: int = 0, requires_qr: bool = False) -> str:
     """Insert a product and return its _id as string."""
     doc = {
         "name": name,
         "description": description,
-        "credit_cost": credit_cost,
+        "price_usd": float(price_usd),
         "active": True,
         "is_numerical": is_numerical,
         "numerical_stock": numerical_stock,
@@ -293,16 +293,17 @@ def delete_product_stock(product_id: str) -> int:
 # ║  PAYMENT helpers                                                    ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def create_payment(user_id: int, username: str, method: str, amount: float,
-                   credits: int, utr_number: str | None = None,
-                   binance_order_id: str | None = None) -> str:
+def create_payment(user_id: int, username: str, method: str, amount_usd: float,
+                   intent: str = "add_to_wallet", product_id: str | None = None,
+                   utr_number: str | None = None, binance_order_id: str | None = None) -> str:
     """Insert a payment request. Returns the _id as string."""
     doc = {
         "user_id": user_id,
         "username": username or "",
         "method": method,
-        "amount": amount,
-        "credits": credits,
+        "amount_usd": amount_usd,
+        "intent": intent,
+        "product_id": product_id,
         "utr_number": utr_number,
         "binance_order_id": binance_order_id,
         "status": "pending",
@@ -401,25 +402,28 @@ def set_setting(key: str, value: str) -> None:
 
 def get_payment_settings() -> dict:
     doc = settings_col.find_one({"_id": "payment_settings"}) or {}
-    from config import UPI_ID, UPI_NAME, BINANCE_UID
+    from config import UPI_ID, UPI_NAME, BINANCE_UID, BEP20_ADDRESS
     return {
         "upi_id": get_setting("upi_id", UPI_ID),
         "upi_name": get_setting("upi_name", UPI_NAME),
         "binance_uid": get_setting("binance_uid", BINANCE_UID),
+        "bep20_address": get_setting("bep20_address", BEP20_ADDRESS),
         "upi_enabled": doc.get("upi_enabled", True),
-        "binance_enabled": doc.get("binance_enabled", True)
+        "binance_enabled": doc.get("binance_enabled", True),
+        "bep20_enabled": doc.get("bep20_enabled", True)
     }
 
 
-def update_payment_settings(upi_id: str, upi_name: str, binance_uid: str) -> None:
+def update_payment_settings(upi_id: str, upi_name: str, binance_uid: str, bep20_address: str) -> None:
     settings_col.update_one(
         {"_id": "payment_settings"},
-        {"$set": {"upi_enabled": True, "binance_enabled": True}},
+        {"$set": {"upi_enabled": True, "binance_enabled": True, "bep20_enabled": True}},
         upsert=True
     )
     set_setting("upi_id", upi_id)
     set_setting("upi_name", upi_name)
     set_setting("binance_uid", binance_uid)
+    set_setting("bep20_address", bep20_address)
 
 
 def get_delivery_settings() -> dict:
