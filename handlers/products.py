@@ -466,123 +466,123 @@ def register(bot: telebot.TeleBot):
         bot.answer_callback_query(call.id)
 
 # ── Direct Payment (UPI / Binance / BEP-20) ─────────────────────────────────
-@bot.callback_query_handler(func=lambda c: c.data.startswith("prod:direct:"))
-def cb_direct_pay(call: telebot.types.CallbackQuery):
-    if not _gate(bot, call):
-        return
-    parts = call.data.split(":")
-    method = parts[2].upper()
-    product_id = parts[3]
-    qty = int(parts[4]) if len(parts) > 4 else 1
-    
-    product = get_product(product_id)
-    if not product or not product.get("active"):
-        bot.answer_callback_query(call.id, "Product no longer available.", show_alert=True)
-        return
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("prod:direct:"))
+    def cb_direct_pay(call: telebot.types.CallbackQuery):
+        if not _gate(bot, call):
+            return
+        parts = call.data.split(":")
+        method = parts[2].upper()
+        product_id = parts[3]
+        qty = int(parts[4]) if len(parts) > 4 else 1
         
-    total_cost_usd = product.get("price_usd", 0.0) * qty
-    
-    from database import get_payment_settings
-    ps = get_payment_settings()
-    from keyboards.inline import cancel_payment_kb
-    
-    if method == "UPI":
-        user_states.set(call.from_user.id, {
-            "action": "awaiting_utr",
-            "amount_usd": total_cost_usd,
-            "method": "UPI",
-            "intent": "direct_pay",
-            "product_id": product_id,
-            "qty": qty
-        })
+        product = get_product(product_id)
+        if not product or not product.get("active"):
+            bot.answer_callback_query(call.id, "Product no longer available.", show_alert=True)
+            return
+            
+        total_cost_usd = product.get("price_usd", 0.0) * qty
         
-        # conversion 1$ = 100 Rs
-        inr_price = int(total_cost_usd * 100)
-        UPI_ID = ps.get("upi_id", "example@upi")
-        UPI_NAME = ps.get("upi_name", "Bot Admin")
+        from database import get_payment_settings
+        ps = get_payment_settings()
+        from keyboards.inline import cancel_payment_kb
         
-        text = (
-            "💳 <b>UPI Payment (Direct Pay)</b>\n\n"
-            f"Product: <b>{product['name']} (x{qty})</b>\n"
-            f"Amount to Pay: <b>₹{inr_price}</b> (for ${total_cost_usd:.2f})\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
-            f"<b>UPI ID:</b> <code>{UPI_ID}</code>\n"
-            f"<b>Name:</b> {UPI_NAME}\n"
-            "━━━━━━━━━━━━━━━━━━━\n\n"
-            "Please transfer the exact amount and then <b>enter your 12-digit UTR Number</b> below 👇"
-        )
+        if method == "UPI":
+            user_states.set(call.from_user.id, {
+                "action": "awaiting_utr",
+                "amount_usd": total_cost_usd,
+                "method": "UPI",
+                "intent": "direct_pay",
+                "product_id": product_id,
+                "qty": qty
+            })
+            
+            # conversion 1$ = 100 Rs
+            inr_price = int(total_cost_usd * 100)
+            UPI_ID = ps.get("upi_id", "example@upi")
+            UPI_NAME = ps.get("upi_name", "Bot Admin")
         
-        from config import UPI_QR_PATH
-        try:
-            with open(UPI_QR_PATH, "rb") as qr:
-                bot.send_photo(
-                    chat_id=call.message.chat.id,
-                    photo=qr,
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=cancel_payment_kb()
-                )
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception:
-            bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
+            text = (
+                "💳 <b>UPI Payment (Direct Pay)</b>\n\n"
+                f"Product: <b>{product['name']} (x{qty})</b>\n"
+                f"Amount to Pay: <b>₹{inr_price}</b> (for ${total_cost_usd:.2f})\n\n"
+                "━━━━━━━━━━━━━━━━━━━\n"
+                f"<b>UPI ID:</b> <code>{UPI_ID}</code>\n"
+                f"<b>Name:</b> {UPI_NAME}\n"
+                "━━━━━━━━━━━━━━━━━━━\n\n"
+                "Please transfer the exact amount and then <b>enter your 12-digit UTR Number</b> below 👇"
+            )
+            
+            from config import UPI_QR_PATH
+            try:
+                with open(UPI_QR_PATH, "rb") as qr:
+                    bot.send_photo(
+                        chat_id=call.message.chat.id,
+                        photo=qr,
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=cancel_payment_kb()
+                    )
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception:
+                bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
 
-    elif method == "BINANCE":
-        user_states.set(call.from_user.id, {
-            "action": "awaiting_binance_id",
-            "amount_usd": total_cost_usd,
-            "method": "Binance",
-            "intent": "direct_pay",
-            "product_id": product_id,
-            "qty": qty
-        })
-        
-        text = (
-            "🪙 <b>Binance Payment (Direct Pay)</b>\n\n"
-            f"Product: <b>{product['name']} (x{qty})</b>\n"
-            f"Amount to Pay: <b>${total_cost_usd:.2f} USDT</b>\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
-            f"<b>Binance UID:</b> <code>{ps.get('binance_uid', 'N/A')}</code>\n"
-            "━━━━━━━━━━━━━━━━━━━\n\n"
-            "After transferring via Binance Pay, <b>enter your Binance Order ID</b> below 👇"
-        )
-        bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
-        
-    elif method == "BEP20":
-        user_states.set(call.from_user.id, {
-            "action": "awaiting_bep20_id",
-            "amount_usd": total_cost_usd,
-            "method": "BEP-20",
-            "intent": "direct_pay",
-            "product_id": product_id,
-            "qty": qty
-        })
-        
-        text = (
-            "🔗 <b>BEP-20 (USDT) Payment (Direct Pay)</b>\n\n"
-            f"Product: <b>{product['name']} (x{qty})</b>\n"
-            f"Amount to Pay: <b>${total_cost_usd:.2f} USDT</b>\n"
-            "Network: <b>BNB Smart Chain (BEP-20)</b>\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
-            f"<b>Deposit Address:</b>\n<code>{ps.get('bep20_address', 'N/A')}</code>\n"
-            "━━━━━━━━━━━━━━━━━━━\n\n"
-            "Please transfer the exact amount and then <b>enter your Transaction ID (TxHash)</b> below 👇"
-        )
-        
-        from config import BEP20_QR_PATH
-        try:
-            with open(BEP20_QR_PATH, "rb") as qr:
-                bot.send_photo(
-                    chat_id=call.message.chat.id,
-                    photo=qr,
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=cancel_payment_kb()
-                )
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception:
+        elif method == "BINANCE":
+            user_states.set(call.from_user.id, {
+                "action": "awaiting_binance_id",
+                "amount_usd": total_cost_usd,
+                "method": "Binance",
+                "intent": "direct_pay",
+                "product_id": product_id,
+                "qty": qty
+            })
+            
+            text = (
+                "🪙 <b>Binance Payment (Direct Pay)</b>\n\n"
+                f"Product: <b>{product['name']} (x{qty})</b>\n"
+                f"Amount to Pay: <b>${total_cost_usd:.2f} USDT</b>\n\n"
+                "━━━━━━━━━━━━━━━━━━━\n"
+                f"<b>Binance UID:</b> <code>{ps.get('binance_uid', 'N/A')}</code>\n"
+                "━━━━━━━━━━━━━━━━━━━\n\n"
+                "After transferring via Binance Pay, <b>enter your Binance Order ID</b> below 👇"
+            )
             bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
+            
+        elif method == "BEP20":
+            user_states.set(call.from_user.id, {
+                "action": "awaiting_bep20_id",
+                "amount_usd": total_cost_usd,
+                "method": "BEP-20",
+                "intent": "direct_pay",
+                "product_id": product_id,
+                "qty": qty
+            })
+            
+            text = (
+                "🔗 <b>BEP-20 (USDT) Payment (Direct Pay)</b>\n\n"
+                f"Product: <b>{product['name']} (x{qty})</b>\n"
+                f"Amount to Pay: <b>${total_cost_usd:.2f} USDT</b>\n"
+                "Network: <b>BNB Smart Chain (BEP-20)</b>\n\n"
+                "━━━━━━━━━━━━━━━━━━━\n"
+                f"<b>Deposit Address:</b>\n<code>{ps.get('bep20_address', 'N/A')}</code>\n"
+                "━━━━━━━━━━━━━━━━━━━\n\n"
+                "Please transfer the exact amount and then <b>enter your Transaction ID (TxHash)</b> below 👇"
+            )
+        
+            from config import BEP20_QR_PATH
+            try:
+                with open(BEP20_QR_PATH, "rb") as qr:
+                    bot.send_photo(
+                        chat_id=call.message.chat.id,
+                        photo=qr,
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=cancel_payment_kb()
+                    )
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception:
+                bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
 
-    bot.answer_callback_query(call.id)
+        bot.answer_callback_query(call.id)
     
 def process_direct_pay_delivery(bot: telebot.TeleBot, user_id: int, product_id: str, amount_usd: float, method: str):
     product = get_product(product_id)
