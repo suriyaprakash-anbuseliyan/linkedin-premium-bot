@@ -550,7 +550,7 @@ def _handle_payment_submission(
                 f"💵 Amount: ${state.get('amount_usd', 0.0):.2f}\n"
                 f"🔢 Order ID: <code>{binance_order_id}</code>"
             )
-        elif intent == "direct_pay_product":
+        elif intent == "direct_pay":
             # For direct pay, deliver the product directly
             from handlers.products import process_direct_pay_delivery
             process_direct_pay_delivery(bot, user_id, state.get("product_id"), state.get("amount_usd", 0.0), state["method"])
