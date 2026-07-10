@@ -76,7 +76,7 @@ def products_list_kb(products: list[dict]) -> InlineKeyboardMarkup:
         
         btn_kwargs = btn_config(f"prod_btn_{p['_id']}", p['name'])
         # Re-attach the dynamic stock and price
-        btn_kwargs['text'] = f"{btn_kwargs['text']} ({stock})  —  {p['credit_cost']} credit(s)"
+        btn_kwargs['text'] = f"{btn_kwargs['text']} ({stock})  —  ${p.get('price_usd', 0.0):.2f}"
         btn_kwargs['callback_data'] = f"prod:view:{p['_id']}"
         
         # Override style based on stock availability
@@ -154,7 +154,7 @@ def admin_qr_review_kb(qr_order_id: str) -> InlineKeyboardMarkup:
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
-# ║  CREDIT PACKAGES                                                    ║
+# ║  WALLET PACKAGES                                                    ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
 
@@ -381,7 +381,7 @@ def referral_settings_kb(ref_config: dict, is_conversion_on: bool = True, is_wel
     """Keyboard for editing referral conversion settings."""
     kb = InlineKeyboardMarkup(row_width=1)
     
-    conv_label = "🟢 Credit Conversion: ON" if is_conversion_on else "🔴 Credit Conversion: OFF"
+    conv_label = "🟢 Bonus Conversion: ON" if is_conversion_on else "🔴 Bonus Conversion: OFF"
     welcome_label = "🟢 Welcome Bonus: ON" if is_welcome_bonus_on else "🔴 Welcome Bonus: OFF"
     kb.add(
         InlineKeyboardButton(conv_label, callback_data="adm:toggle_conversion"),
@@ -389,7 +389,7 @@ def referral_settings_kb(ref_config: dict, is_conversion_on: bool = True, is_wel
     )
     kb.add(
         InlineKeyboardButton(
-            f"🔢 Points per Credit: {ref_config['points_per_credit']}",
+            f"🔢 Points per $1.00 Bonus: {ref_config['points_per_credit']}",
             callback_data="admset:referral_points_per_credit",
         ),
         InlineKeyboardButton(
