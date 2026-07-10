@@ -14,7 +14,7 @@ from keyboards.inline import join_channel_kb
 WELCOME_TEXT = (
     "🎯 <b>Welcome to LinkedIn Premium Store!</b>\n\n"
     "Purchase legitimate LinkedIn Premium referral/benefit links "
-    "using credits.\n\n"
+    "using your wallet balance.\n\n"
     "Use the menu below to get started 👇"
 )
 

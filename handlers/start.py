@@ -23,7 +23,7 @@ from utils.states import user_states
 WELCOME_TEXT = (
     "🎯 <b>Welcome to LinkedIn Premium Store!</b>\n\n"
     "Purchase legitimate LinkedIn Premium referral/benefit links "
-    "using credits.\n\n"
+    "using your wallet balance.\n\n"
     "Use the menu below to get started 👇"
 )
 
@@ -88,7 +88,7 @@ def register(bot: telebot.TeleBot):
             if is_welcome_bonus_enabled():
                 msg = bot.send_message(
                     user_id,
-                    "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free credits in the Referral menu!",
+                    "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free funds in the Referral menu!",
                     parse_mode="HTML"
                 )
                 from database import schedule_message_cleanup
@@ -152,7 +152,7 @@ def register(bot: telebot.TeleBot):
             if is_welcome_bonus_enabled():
                 msg = bot.send_message(
                     user_id,
-                    "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free credits in the Referral menu!",
+                    "🎉 <b>Welcome Bonus!</b>\n\nYou received <b>1 Point</b> for joining us. You can redeem points for free funds in the Referral menu!",
                     parse_mode="HTML"
                 )
                 from database import schedule_message_cleanup
@@ -175,7 +175,7 @@ def _maybe_award_referral(bot: telebot.TeleBot, referrer: dict) -> None:
             referrer["user_id"],
             "🎉 <b>Someone just joined using your referral link!</b>\n\n"
             "You earned <b>1 referral point</b>. Go to the <b>Referral</b> menu "
-            "to convert your points into free credits! 🚀",
+            "to convert your points into free funds! 🚀",
             parse_mode="HTML",
         )
         from database import schedule_message_cleanup

@@ -33,7 +33,7 @@ def _qr_timeout(bot: telebot.TeleBot, qr_order_id: str, user_id: int):
     qr_order = get_qr_order(qr_order_id)
     if qr_order and qr_order["status"] in ("awaiting_qr", "reupload"):
         update_qr_order_status(qr_order_id, "cancelled")
-        credits_to_refund = qr_order.get("credits_used", 0)
+        credits_to_refund = qr_order.get("price_paid_usd", 0.0)
         if credits_to_refund > 0:
             add_balance(user_id, credits_to_refund)
             
@@ -49,7 +49,7 @@ def _qr_timeout(bot: telebot.TeleBot, qr_order_id: str, user_id: int):
                 user_id,
                 "❌ <b>QR Upload Timeout</b>\n\n"
                 f"You did not upload the QR code within 150 seconds. "
-                f"Your order for {qr_order.get('qty')}x <b>{qr_order.get('product_name')}</b> has been cancelled and {credits_to_refund} credit(s) have been refunded.",
+                f"Your order for {qr_order.get('qty')}x <b>{qr_order.get('product_name')}</b> has been cancelled and ${credits_to_refund:.2f} has been refunded.",
                 parse_mode="HTML"
             )
         except Exception:
@@ -159,7 +159,7 @@ def register(bot: telebot.TeleBot):
         text = (
             f"📦 <b>{product['name']}</b>\n\n"
             f"{product['description']}\n\n"
-            f"💎 <b>Cost:</b> {product['credit_cost']} credit(s)\n"
+            f"💎 <b>Cost:</b> ${product.get('price_usd', 0.0):.2f}\n"
             f"📦 <b>In Stock:</b> {stock}"
         )
         bot.edit_message_text(

@@ -187,7 +187,7 @@ def register(bot: telebot.TeleBot):
             f"<b>Credit Conversion:</b> {conv_status}\n"
             f"<b>Welcome Bonus:</b> {welcome_status}\n"
             f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
-            f"🎯 <b>Max Free Credits:</b> {ref_config['max_free_credits']}\n\n"
+            f"🎯 <b>Max Free Bonus:</b> {ref_config['max_free_credits']}\n\n"
             "Tap a button below to edit:"
         )
         bot.edit_message_text(
@@ -280,7 +280,7 @@ def register(bot: telebot.TeleBot):
             f"<b>Credit Conversion:</b> {conv_status}\n"
             f"<b>Welcome Bonus:</b> {welcome_status}\n"
             f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
-            f"🎯 <b>Max Free Credits:</b> {ref_config['max_free_credits']}\n\n"
+            f"🎯 <b>Max Free Bonus:</b> {ref_config['max_free_credits']}\n\n"
             "Tap a button below to edit:"
         )
         bot.edit_message_text(
@@ -318,7 +318,7 @@ def register(bot: telebot.TeleBot):
             f"<b>Credit Conversion:</b> {conv_status}\n"
             f"<b>Welcome Bonus:</b> {welcome_status}\n"
             f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
-            f"🎯 <b>Max Free Credits:</b> {ref_config['max_free_credits']}\n\n"
+            f"🎯 <b>Max Free Bonus:</b> {ref_config['max_free_credits']}\n\n"
             "Tap a button below to edit:"
         )
         bot.edit_message_text(
@@ -1288,7 +1288,7 @@ def register(bot: telebot.TeleBot):
             ref_config = get_referral_config()
             referral_labels = {
                 "referral_points_per_credit": "🔢 Points per Credit",
-                "referral_max_free_credits": "🎯 Max Free Credits",
+                "referral_max_free_credits": "🎯 Max Free Bonus",
             }
             referral_config_keys = {
                 "referral_points_per_credit": "points_per_credit",

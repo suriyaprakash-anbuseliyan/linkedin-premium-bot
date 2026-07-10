@@ -393,7 +393,7 @@ def referral_settings_kb(ref_config: dict, is_conversion_on: bool = True, is_wel
             callback_data="admset:referral_points_per_credit",
         ),
         InlineKeyboardButton(
-            f"🎯 Max Free Credits: {ref_config['max_free_credits']}",
+            f"🎯 Max Free Bonus: {ref_config['max_free_credits']}",
             callback_data="admset:referral_max_free_credits",
         ),
     )
