@@ -632,18 +632,18 @@ def _handle_add_product_step(
         user_states.update(user_id, step="credit_cost", product_desc=html_desc.strip() if html_desc else "")
         bot.send_message(
             user_id,
-            "Step 3/3 — Enter the <b>credit cost</b> (integer):",
+            "Step 3/3 — Enter the <b>cost in USD</b> (e.g. 1.50):",
             parse_mode="HTML",
             reply_markup=admin_back_kb(),
         )
 
     elif step == "credit_cost":
         try:
-            cost = int(text)
+            cost = float(text)
             if cost <= 0:
                 raise ValueError
         except ValueError:
-            bot.send_message(user_id, "❌ Please enter a valid positive integer.")
+            bot.send_message(user_id, "❌ Please enter a valid positive number.")
             return
 
         user_states.update(user_id, step="stock_type", product_cost=cost)
@@ -667,7 +667,7 @@ def _handle_add_product_step(
         product_id = create_product(
             name=state["product_name"],
             description=state["product_desc"],
-            credit_cost=state["product_cost"],
+            price_usd=state["product_cost"],
             is_numerical=True,
             numerical_stock=initial_stock,
         )
@@ -677,7 +677,7 @@ def _handle_add_product_step(
             user_id,
             f"✅ <b>Product Created!</b>\n\n"
             f"Name: <b>{state['product_name']}</b>\n"
-            f"Cost: {state['product_cost']} credits\n"
+            f"Cost: ${state['product_cost']:.2f}\n"
             f"Type: Numerical Service\n"
             f"Initial Stock: {initial_stock}\n"
             f"ID: <code>{product_id}</code>",
@@ -704,13 +704,13 @@ def _handle_admin_edit_product(
     
     if field == "cost":
         try:
-            val = int(text)
+            val = float(text)
             if val < 0:
                 raise ValueError
         except ValueError:
-            bot.send_message(user_id, "❌ Please enter a valid non-negative integer for the cost.")
+            bot.send_message(user_id, "❌ Please enter a valid non-negative number for the cost.")
             return
-        update_product(pid, {"$set": {"credit_cost": val}})
+        update_product(pid, {"$set": {"price_usd": val}})
         field_str = "Cost"
     elif field == "name":
         update_product(pid, {"$set": {"name": text.strip()}})
