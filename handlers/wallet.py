@@ -36,7 +36,7 @@ def _gate(bot, call):
 def register(bot: telebot.TeleBot):
 
     # ── Show add funds prompt ─────────────────────────────────────
-    @bot.callback_query_handler(func=lambda c: c.data == "menu:wallet_add")
+    @bot.callback_query_handler(func=lambda c: c.data in ["menu:wallet_add", "menu:credits"])
     def cb_add_funds(call: telebot.types.CallbackQuery):
         if not _gate(bot, call):
             return

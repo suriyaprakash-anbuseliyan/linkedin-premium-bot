@@ -32,7 +32,7 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(InlineKeyboardButton(**btn_config("menu_buy", "BUY", "🛒", "success"), callback_data="menu:buy"))
     kb.add(
-        InlineKeyboardButton(**btn_config("menu_credits", "Add Funds", "💰", "primary"), callback_data="menu:credits"),
+        InlineKeyboardButton(**btn_config("menu_credits", "Add Funds", "💰", "primary"), callback_data="menu:wallet_add"),
         InlineKeyboardButton(**btn_config("menu_balance", "Balance", "💳"), callback_data="menu:balance"),
     )
     kb.add(
