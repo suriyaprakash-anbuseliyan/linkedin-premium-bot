@@ -476,7 +476,7 @@ def register(bot: telebot.TeleBot):
         text = (
             f"📦 <b>{product['name']}</b>\n\n"
             f"{product['description']}\n\n"
-            f"💎 Cost: {product['credit_cost']} credits\n"
+            f"💎 Cost: ${product.get('price_usd', 0.0):.2f}\n"
             f"📌 Active: {'Yes' if product['active'] else 'No'}\n"
             f"{stock_line}\n"
             f"📅 Created: {format_datetime(product.get('created_at'))}"
@@ -591,7 +591,7 @@ def register(bot: telebot.TeleBot):
             product_id = create_product(
                 name=state["product_name"],
                 description=state["product_desc"],
-                credit_cost=state["product_cost"],
+                price_usd=state["product_cost"],
                 is_numerical=False,
                 numerical_stock=0,
             )
@@ -600,7 +600,7 @@ def register(bot: telebot.TeleBot):
             bot.edit_message_text(
                 f"✅ <b>Product Created!</b>\n\n"
                 f"Name: <b>{state['product_name']}</b>\n"
-                f"Cost: {state['product_cost']} credits\n"
+                f"Cost: ${state['product_cost']:.2f}\n"
                 f"Type: Links / Coupons\n"
                 f"ID: <code>{product_id}</code>\n\n"
                 "📦 Now go to <b>Manage Products</b> → select this product → "
@@ -639,7 +639,7 @@ def register(bot: telebot.TeleBot):
         field_name_map = {
             "name": "Name",
             "desc": "Description",
-            "cost": "Cost (Credits)",
+            "cost": "Cost (USD)",
             "delmsg": "Delivery Message",
             "expdays": "Expiration Days"
         }
@@ -659,7 +659,7 @@ def register(bot: telebot.TeleBot):
         elif field_type == 'expdays':
             current_val = product.get('expiration_days', 'Global Default')
         else:
-            current_val = product.get('credit_cost')
+            current_val = product.get('price_usd')
         
         bot.edit_message_text(
             f"✏️ <b>Edit {field_name_map[field_type]}</b>\n\n"
