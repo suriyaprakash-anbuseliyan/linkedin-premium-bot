@@ -5,7 +5,7 @@ MongoDB connection helper and collection accessors.
 Creates indexes on first import so queries stay fast.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from config import MONGO_URI, DB_NAME, logger
 
@@ -107,12 +107,74 @@ def increment_referral_count(user_id: int) -> dict | None:
 
 def redeem_referral_points(user_id: int, points_cost: int, bonus_usd: float) -> bool:
     """
-    Atomically deduct points_cost and add bonus_usd to wallet.
-    Returns True if successful, False if insufficient points.
+    Legacy points-to-credits conversion function. Keeping for backwards compatibility if needed.
     """
     result = users_col.update_one(
         {"user_id": user_id, "referral_points": {"$gte": points_cost}},
         {"$inc": {"wallet_balance": bonus_usd, "free_referral_bonus": bonus_usd, "referral_points": -points_cost}},
+    )
+    return result.modified_count > 0
+
+
+def get_referral_stats(referral_code: str) -> dict:
+    """Calculate referrals for 24h, 7d, and total."""
+    now = datetime.now(timezone.utc)
+    day_ago = now - timedelta(days=1)
+    week_ago = now - timedelta(days=7)
+    
+    total = users_col.count_documents({"referred_by": referral_code})
+    last_24h = users_col.count_documents({"referred_by": referral_code, "joined_at": {"$gte": day_ago}})
+    last_7d = users_col.count_documents({"referred_by": referral_code, "joined_at": {"$gte": week_ago}})
+    
+    return {"total": total, "24h": last_24h, "7d": last_7d}
+
+
+def process_referral_commission(user_id: int, amount_usd: float) -> None:
+    """
+    Give the referrer a % of the deposit/purchase, plus a fixed bonus on the first purchase.
+    """
+    user = get_user(user_id)
+    if not user or not user.get("referred_by"):
+        return
+        
+    referrer = get_user_by_referral_code(user["referred_by"])
+    if not referrer:
+        return
+        
+    ref_config = get_referral_config()
+    commission_pct = ref_config.get("commission_percent", 2.0)
+    first_purchase_bonus = ref_config.get("first_purchase_bonus", 0.10)
+    
+    commission = amount_usd * (commission_pct / 100.0)
+    
+    bonus_amount = 0.0
+    if not user.get("first_purchase_bonus_given"):
+        bonus_amount = first_purchase_bonus
+        update_user(user_id, {"$set": {"first_purchase_bonus_given": True}})
+        
+    total_commission = commission + bonus_amount
+    if total_commission <= 0:
+        return
+    
+    update_user(referrer["user_id"], {
+        "$inc": {
+            "referral_earned_usdt": total_commission,
+            "referral_available_usdt": total_commission
+        }
+    })
+
+
+def transfer_referral_commission(user_id: int, amount: float) -> bool:
+    """Atomically deduct from available and add to wallet."""
+    result = users_col.update_one(
+        {"user_id": user_id, "referral_available_usdt": {"$gte": amount}},
+        {
+            "$inc": {
+                "referral_available_usdt": -amount,
+                "referral_transferred_usdt": amount,
+                "wallet_balance": amount
+            }
+        }
     )
     return result.modified_count > 0
 
@@ -227,13 +289,24 @@ def add_stock_items(product_id: str, links: list[str], allow_duplicates: bool = 
 
     # Filter out links that already exist in any product's stock
     stripped_links = [link.strip() for link in links if link.strip()]
+    
+    unique_links = []
+    seen = set()
+    in_batch_dups = 0
+    for link in stripped_links:
+        if link in seen:
+            in_batch_dups += 1
+        else:
+            seen.add(link)
+            unique_links.append(link)
+
     if allow_duplicates:
         new_links = stripped_links
         duplicate_count = 0
     else:
-        existing = get_existing_stock_links(stripped_links)
-        new_links = [l for l in stripped_links if l not in existing]
-        duplicate_count = len(stripped_links) - len(new_links)
+        existing = get_existing_stock_links(unique_links)
+        new_links = [l for l in unique_links if l not in existing]
+        duplicate_count = in_batch_dups + (len(unique_links) - len(new_links))
 
     docs = [
         {
@@ -484,33 +557,33 @@ def set_referral_enabled(enabled: bool) -> None:
 
 def get_referral_config() -> dict:
     """
-    Get referral conversion config from DB.
-    Falls back to defaults if not set.
-    Returns: {"points_per_credit": int, "max_free_credits": int}
+    Get new USDT referral config from DB.
+    Returns: {"commission_percent": float, "first_purchase_bonus": float, "min_transfer": float}
     """
-    # defaults
-    REFERRALS_PER_CREDIT = 5
-    MAX_FREE_BONUS_USD = 5
-    
     doc = settings_col.find_one({"_id": "referral_config"})
     if doc:
         return {
-            "points_per_credit": doc.get("points_per_credit", REFERRALS_PER_CREDIT),
-            "max_free_bonus_usd": doc.get("max_free_bonus_usd", MAX_FREE_BONUS_USD),
+            "commission_percent": doc.get("commission_percent", 2.0),
+            "first_purchase_bonus": doc.get("first_purchase_bonus", 0.10),
+            "min_transfer": doc.get("min_transfer", 2.00)
         }
     return {
-        "points_per_credit": REFERRALS_PER_CREDIT,
-        "max_free_bonus_usd": MAX_FREE_BONUS_USD,
+        "commission_percent": 2.0,
+        "first_purchase_bonus": 0.10,
+        "min_transfer": 2.00
     }
 
 
-def set_referral_config(points_per_credit: int = None, max_free_bonus_usd: int = None) -> None:
-    """Update referral conversion config. Only updates provided fields."""
+def set_referral_config(commission_percent: float = None, first_purchase_bonus: float = None, min_transfer: float = None) -> None:
+    """Update new referral config. Only updates provided fields."""
     update = {}
-    if points_per_credit is not None:
-        update["points_per_credit"] = points_per_credit
-    if max_free_bonus_usd is not None:
-        update["max_free_bonus_usd"] = max_free_bonus_usd
+    if commission_percent is not None:
+        update["commission_percent"] = commission_percent
+    if first_purchase_bonus is not None:
+        update["first_purchase_bonus"] = first_purchase_bonus
+    if min_transfer is not None:
+        update["min_transfer"] = min_transfer
+        
     if update:
         settings_col.update_one(
             {"_id": "referral_config"},

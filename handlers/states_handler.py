@@ -70,7 +70,18 @@ def broadcast_new_stock(bot: telebot.TeleBot, product_name: str, added_count: in
 
 def register(bot: telebot.TeleBot):
 
-    @bot.message_handler(content_types=['text', 'photo', 'document'], func=lambda m: user_states.has(m.from_user.id))
+    def _should_handle_state(m: telebot.types.Message) -> bool:
+        if not user_states.has(m.from_user.id):
+            return False
+        state = user_states.get(m.from_user.id)
+        if not state:
+            return False
+        action = state.get("action")
+        if m.content_type == 'document' and action in ("admin_add_stock", "admin_add_stock_multi", "admin_bulk_import") and is_admin(m.from_user.id):
+            return False
+        return True
+
+    @bot.message_handler(content_types=['text', 'photo', 'document'], func=_should_handle_state)
     def handle_state_input(message: telebot.types.Message):
         user_id = message.from_user.id
         try:
@@ -233,7 +244,7 @@ def register(bot: telebot.TeleBot):
     @bot.message_handler(
         content_types=["document"],
         func=lambda m: user_states.has(m.from_user.id)
-            and user_states.get(m.from_user.id, {}).get("action") == "admin_bulk_import"
+            and (user_states.get(m.from_user.id) or {}).get("action") == "admin_bulk_import"
             and is_admin(m.from_user.id),
     )
     def handle_global_bulk_csv_upload(message: telebot.types.Message):
@@ -283,6 +294,12 @@ def register(bot: telebot.TeleBot):
         matched_count = 0
         unmatched_count = 0
         
+        import re
+        def get_core_words(text):
+            words = set(re.findall(r'[a-z]{2,}', text.lower()))
+            stop_words = {"months", "month", "year", "years", "of", "the", "pro", "lite", "basic", "premium", "plus", "and"}
+            return words - stop_words
+
         for row in reader:
             name_val = row.get(name_col, "").strip()
             link_val = row.get(link_col, "").strip()
@@ -291,10 +308,26 @@ def register(bot: telebot.TeleBot):
                 
             if validate_link(link_val):
                 matched_pid = None
+                best_match = None
+                best_score = 0
+                csv_words = get_core_words(name_val)
+                
                 for pname_lower, pid in product_map.items():
                     if name_val.lower() in pname_lower or pname_lower in name_val.lower():
                         matched_pid = pid
                         break
+                    else:
+                        db_words = get_core_words(pname_lower)
+                        if not db_words: continue
+                        
+                        overlap = len(csv_words.intersection(db_words))
+                        score = overlap / len(db_words)
+                        if score > best_score and score >= 0.5:
+                            best_score = score
+                            best_match = pid
+                            
+                if not matched_pid and best_match:
+                    matched_pid = best_match
                         
                 if matched_pid:
                     if matched_pid not in pending:
@@ -312,8 +345,9 @@ def register(bot: telebot.TeleBot):
         bot.send_message(
             user_id,
             f"📄 <b>File Processed:</b> {file_name}\n"
-            f"✅ Matched Links: <b>{matched_count}</b>\n"
+            f"✅ Matched Products: <b>{matched_count}</b>\n"
             f"❌ Unmatched (No product found): <b>{unmatched_count}</b>\n\n"
+            f"<i>Note: Duplicates will be skipped during final processing.</i>\n\n"
             f"Total files uploaded: {state['file_count']}\n"
             "Upload another file, or click <b>Process Uploads</b>.",
             parse_mode="HTML",
@@ -324,7 +358,7 @@ def register(bot: telebot.TeleBot):
     @bot.message_handler(
         content_types=["document"],
         func=lambda m: user_states.has(m.from_user.id)
-            and user_states.get(m.from_user.id, {}).get("action") in ("admin_add_stock", "admin_add_stock_multi")
+            and (user_states.get(m.from_user.id) or {}).get("action") in ("admin_add_stock", "admin_add_stock_multi")
             and is_admin(m.from_user.id),
     )
     def handle_stock_csv_upload(message: telebot.types.Message):
@@ -624,10 +658,12 @@ def _handle_payment_submission(
     )
 
     if is_auto_verified:
-        from database import approve_payment, add_balance
+        from database import approve_payment, add_balance, process_referral_commission
         from utils.helpers import announce_event
         
         approve_payment(str(payment_id))
+        process_referral_commission(user_id, state.get("amount_usd", 0.0))
+        
         intent = state.get("intent", "add_to_wallet")
         
         if intent == "add_to_wallet":
@@ -1761,32 +1797,34 @@ def _handle_edit_setting(
         bot.send_message(user_id, "❌ Value cannot be empty. Try again.")
         return
 
-    # Handle referral config keys separately (need integer validation + dedicated storage)
-    if setting_key in ("referral_points_per_credit", "referral_max_free_bonus_usd"):
+    # Handle referral config keys separately (need float validation + dedicated storage)
+    if setting_key in ("referral_commission", "referral_first_bonus", "referral_min_transfer"):
         try:
-            int_val = int(text)
-            if int_val <= 0:
+            float_val = float(text)
+            if float_val < 0:
                 raise ValueError
         except ValueError:
-            bot.send_message(user_id, "❌ Please enter a valid positive integer.")
+            bot.send_message(user_id, "❌ Please enter a valid positive number.")
             return
 
         from database import set_referral_config, get_referral_config
         from keyboards.inline import referral_settings_kb
 
-        if setting_key == "referral_points_per_credit":
-            set_referral_config(points_per_credit=int_val)
+        if setting_key == "referral_commission":
+            set_referral_config(commission_percent=float_val)
+        elif setting_key == "referral_first_bonus":
+            set_referral_config(first_purchase_bonus=float_val)
         else:
-            set_referral_config(max_free_bonus_usd=int_val)
+            set_referral_config(min_transfer=float_val)
 
         user_states.clear(user_id)
-        logger.info("Referral config updated: %s = %s", setting_key, int_val)
+        logger.info("Referral config updated: %s = %s", setting_key, float_val)
 
         ref_config = get_referral_config()
         bot.send_message(
             user_id,
             f"✅ <b>{setting_label}</b> updated!\n\n"
-            f"New value: <code>{int_val}</code>",
+            f"New value: <code>{float_val}</code>",
             parse_mode="HTML",
             reply_markup=referral_settings_kb(ref_config),
         )

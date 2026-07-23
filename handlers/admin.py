@@ -176,7 +176,7 @@ def register(bot: telebot.TeleBot):
         ref_config = get_referral_config()
         from database import is_referral_enabled, is_credit_conversion_enabled, is_welcome_bonus_enabled
         is_ref = is_referral_enabled()
-        is_conv = is_credit_conversion_enabled()
+        is_conv = is_credit_conversion_enabled() # Kept for backward compatibility in KB signature
         is_welcome = is_welcome_bonus_enabled()
         status = "🟢 Enabled" if is_ref else "🔴 Disabled"
         conv_status = "🟢 ON" if is_conv else "🔴 OFF"
@@ -185,10 +185,10 @@ def register(bot: telebot.TeleBot):
         text = (
             "⚙️ <b>Referral Settings</b>\n\n"
             f"<b>Referral Program:</b> {status}\n"
-            f"<b>Credit Conversion:</b> {conv_status}\n"
             f"<b>Welcome Bonus:</b> {welcome_status}\n"
-            f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
-            f"🎯 <b>Max Free Bonus:</b> ${ref_config['max_free_bonus_usd']}\n\n"
+            f"📈 <b>Commission:</b> {ref_config['commission_percent']}%\n"
+            f"🎁 <b>1st Purchase Bonus:</b> ${ref_config['first_purchase_bonus']}\n"
+            f"💸 <b>Min Transfer:</b> ${ref_config['min_transfer']}\n\n"
             "Tap a button below to edit:"
         )
         bot.edit_message_text(
@@ -825,9 +825,9 @@ def register(bot: telebot.TeleBot):
             added, dups = add_stock_items(product_id, data["links"], allow_duplicates=False)
             added_summary.append(f"• <b>{data['name']}</b>: {added} added (skipped {dups} dups)")
             
-            # Optionally trigger broadcast if there is a broadcast function available here
-            # For simplicity, we just add the stock. The document handler in states_handler can handle broadcasts if needed,
-            # but usually it's handled there. Since we moved it here, we will just show the summary.
+            if added > 0:
+                from handlers.states_handler import broadcast_new_stock
+                broadcast_new_stock(bot, data["name"], added, product_id)
             
         user_states.clear(call.from_user.id)
         
@@ -913,6 +913,9 @@ def register(bot: telebot.TeleBot):
         if not payment:
             bot.answer_callback_query(call.id, "Payment not found.", show_alert=True)
             return
+
+        from database import process_referral_commission
+        process_referral_commission(payment["user_id"], payment.get("amount_usd", 0.0))
 
         user_id = payment["user_id"]
         amount_usd = payment.get("amount_usd", 0.0)
@@ -1046,6 +1049,8 @@ def register(bot: telebot.TeleBot):
     def cb_admin_user_actions(call: telebot.types.CallbackQuery):
         if not _admin_only(call):
             return
+            
+        from keyboards.inline import admin_user_actions_kb
             
         action, target_id_str = call.data.split(":")[1:3]
         target_id = int(target_id_str)
@@ -1429,12 +1434,14 @@ def register(bot: telebot.TeleBot):
         if setting_key.startswith("referral_"):
             ref_config = get_referral_config()
             referral_labels = {
-                "referral_points_per_credit": "🔢 Points per Credit",
-                "referral_max_free_bonus_usd": "🎯 Max Free Bonus",
+                "referral_commission": "📈 Commission %",
+                "referral_first_bonus": "🎁 1st Purchase Bonus",
+                "referral_min_transfer": "💸 Min Transfer Amount",
             }
             referral_config_keys = {
-                "referral_points_per_credit": "points_per_credit",
-                "referral_max_free_bonus_usd": "max_free_bonus_usd",
+                "referral_commission": "commission_percent",
+                "referral_first_bonus": "first_purchase_bonus",
+                "referral_min_transfer": "min_transfer",
             }
             label = referral_labels.get(setting_key, setting_key)
             current = ref_config.get(referral_config_keys.get(setting_key, ""), "N/A")

@@ -56,10 +56,13 @@ def back_to_menu_kb() -> InlineKeyboardMarkup:
     return kb
 
 
-def referral_menu_kb(can_convert: bool) -> InlineKeyboardMarkup:
+def referral_menu_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("🔄 Redeem points", callback_data="ref:convert"))
-    kb.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="menu:main"))
+    # The actual "Copy Link" might be better implemented by formatting the link in the message as <code>,
+    # but we can add a placeholder button or rely on Telegram's built in copy. Telegram inline buttons cannot "copy to clipboard".
+    # I'll just use the standard layout requested.
+    kb.add(InlineKeyboardButton("💸 Transfer to Wallet", callback_data="ref:transfer"))
+    kb.add(InlineKeyboardButton("🔙 Back", callback_data="menu:main"))
     return kb
 
 
@@ -382,20 +385,22 @@ def referral_settings_kb(ref_config: dict, is_conversion_on: bool = True, is_wel
     """Keyboard for editing referral conversion settings."""
     kb = InlineKeyboardMarkup(row_width=1)
     
-    conv_label = "🟢 Bonus Conversion: ON" if is_conversion_on else "🔴 Bonus Conversion: OFF"
     welcome_label = "🟢 Welcome Bonus: ON" if is_welcome_bonus_on else "🔴 Welcome Bonus: OFF"
     kb.add(
-        InlineKeyboardButton(conv_label, callback_data="adm:toggle_conversion"),
         InlineKeyboardButton(welcome_label, callback_data="adm:toggle_welcome_bonus"),
     )
     kb.add(
         InlineKeyboardButton(
-            f"🔢 Points per $1.00 Bonus: {ref_config['points_per_credit']}",
-            callback_data="admset:referral_points_per_credit",
+            f"📈 Commission: {ref_config['commission_percent']}%",
+            callback_data="admset:referral_commission",
         ),
         InlineKeyboardButton(
-            f"🎯 Max Free Bonus: ${ref_config['max_free_bonus_usd']}",
-            callback_data="admset:referral_max_free_bonus_usd",
+            f"🎁 1st Purchase Bonus: ${ref_config['first_purchase_bonus']}",
+            callback_data="admset:referral_first_bonus",
+        ),
+        InlineKeyboardButton(
+            f"💸 Min Transfer: ${ref_config['min_transfer']}",
+            callback_data="admset:referral_min_transfer",
         ),
     )
     kb.add(InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"))
