@@ -56,22 +56,22 @@ def register(bot: telebot.TeleBot):
 
         ref_config = get_referral_config()
         points_per_credit = ref_config["points_per_credit"]
-        max_free_credits = ref_config["max_free_credits"]
+        max_free_bonus_usd = ref_config["max_free_bonus_usd"]
 
         ref_link = f"https://t.me/{BOT_USERNAME}?start={user['referral_code']}"
         points = user.get("referral_points", 0)
-        can_convert = points >= points_per_credit and user.get("free_referral_bonus", 0.0) < (max_free_credits * 0.5)
+        can_convert = points >= points_per_credit and user.get("free_referral_bonus", 0.0) < max_free_bonus_usd
 
         text = (
             "🎁 <b>Referral Program</b>\n\n"
             f"Share your referral link and earn <b>free bonus funds</b>!\n\n"
             f"📊 <b>Total Referrals:</b> {user['referral_count']}\n"
             f"🪙 <b>Referral Points:</b> {points}\n"
-            f"🎁 <b>Free Bonus Earned:</b> ${user.get('free_referral_bonus', 0.0):.2f}/${max_free_credits * 0.5:.2f}\n\n"
+            f"🎁 <b>Free Bonus Earned:</b> ${user.get('free_referral_bonus', 0.0):.2f}/${max_free_bonus_usd:.2f}\n\n"
             f"💡 <b>Rules:</b>\n"
             f"• 1 referral = 1 point\n"
             f"• {points_per_credit} points = +$1.00 bonus\n"
-            f"• Maximum {max_free_credits} free bonus funds\n"
+            f"• Maximum ${max_free_bonus_usd:.2f} free bonus funds\n"
             f"• Only new users count\n"
             f"• No self-referrals\n\n"
             f"🔗 <b>Your Referral Link:</b>\n<code>{ref_link}</code>"
@@ -106,11 +106,11 @@ def register(bot: telebot.TeleBot):
 
         ref_config = get_referral_config()
         points_per_credit = ref_config["points_per_credit"]
-        max_free_credits = ref_config["max_free_credits"]
+        max_free_bonus_usd = ref_config["max_free_bonus_usd"]
 
         points = user.get("referral_points", 0)
         
-        if user.get("free_referral_bonus", 0.0) >= (max_free_credits * 0.5):
+        if user.get("free_referral_bonus", 0.0) >= max_free_bonus_usd:
             bot.answer_callback_query(call.id, "❌ You have reached the maximum free bonus funds limit.", show_alert=True)
             return
             

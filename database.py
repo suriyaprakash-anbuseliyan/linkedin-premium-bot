@@ -488,27 +488,27 @@ def get_referral_config() -> dict:
     """
     # defaults
     REFERRALS_PER_CREDIT = 5
-    MAX_FREE_REFERRAL_CREDITS = 100
+    MAX_FREE_BONUS_USD = 5
     
     doc = settings_col.find_one({"_id": "referral_config"})
     if doc:
         return {
             "points_per_credit": doc.get("points_per_credit", REFERRALS_PER_CREDIT),
-            "max_free_credits": doc.get("max_free_credits", MAX_FREE_REFERRAL_CREDITS),
+            "max_free_bonus_usd": doc.get("max_free_bonus_usd", MAX_FREE_BONUS_USD),
         }
     return {
         "points_per_credit": REFERRALS_PER_CREDIT,
-        "max_free_credits": MAX_FREE_REFERRAL_CREDITS,
+        "max_free_bonus_usd": MAX_FREE_BONUS_USD,
     }
 
 
-def set_referral_config(points_per_credit: int = None, max_free_credits: int = None) -> None:
+def set_referral_config(points_per_credit: int = None, max_free_bonus_usd: int = None) -> None:
     """Update referral conversion config. Only updates provided fields."""
     update = {}
     if points_per_credit is not None:
         update["points_per_credit"] = points_per_credit
-    if max_free_credits is not None:
-        update["max_free_credits"] = max_free_credits
+    if max_free_bonus_usd is not None:
+        update["max_free_bonus_usd"] = max_free_bonus_usd
     if update:
         settings_col.update_one(
             {"_id": "referral_config"},

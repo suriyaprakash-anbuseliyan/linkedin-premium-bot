@@ -141,8 +141,8 @@ Admin approves/rejects → User gets notified + credits added
 ## 🎁 Referral System
 
 - Each user gets a unique referral link: `https://t.me/linkedinpremiumstore_bot?start=REF_CODE`
-- Every **3** successful referrals → **+1 free credit**
-- Maximum **10** free referral credits per user
+- Every **5** successful referrals → **+$1.00 bonus to wallet**
+- Maximum **$50.00** free bonus funds per user
 - No self-referrals or duplicate referrals
 
 ---
