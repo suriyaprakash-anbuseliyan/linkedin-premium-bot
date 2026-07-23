@@ -25,6 +25,7 @@ from keyboards.inline import (
     admin_products_list_kb, admin_product_actions_kb,
     admin_payment_review_kb, payment_settings_kb,
     referral_settings_kb, admin_delivery_settings_kb,
+    bulk_stock_upload_kb, bulk_stock_confirm_kb,
 )
 from utils.helpers import is_admin, format_datetime
 from utils.states import user_states
@@ -187,7 +188,7 @@ def register(bot: telebot.TeleBot):
             f"<b>Credit Conversion:</b> {conv_status}\n"
             f"<b>Welcome Bonus:</b> {welcome_status}\n"
             f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
-            f"🎯 <b>Max Free Bonus:</b> {ref_config['max_free_credits']}\n\n"
+            f"🎯 <b>Max Free Bonus:</b> ${ref_config['max_free_bonus_usd']}\n\n"
             "Tap a button below to edit:"
         )
         bot.edit_message_text(
@@ -280,7 +281,7 @@ def register(bot: telebot.TeleBot):
             f"<b>Credit Conversion:</b> {conv_status}\n"
             f"<b>Welcome Bonus:</b> {welcome_status}\n"
             f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
-            f"🎯 <b>Max Free Bonus:</b> {ref_config['max_free_credits']}\n\n"
+            f"🎯 <b>Max Free Bonus:</b> ${ref_config['max_free_bonus_usd']}\n\n"
             "Tap a button below to edit:"
         )
         bot.edit_message_text(
@@ -318,7 +319,7 @@ def register(bot: telebot.TeleBot):
             f"<b>Credit Conversion:</b> {conv_status}\n"
             f"<b>Welcome Bonus:</b> {welcome_status}\n"
             f"🔢 <b>Points per Credit:</b> {ref_config['points_per_credit']}\n"
-            f"🎯 <b>Max Free Bonus:</b> {ref_config['max_free_credits']}\n\n"
+            f"🎯 <b>Max Free Bonus:</b> ${ref_config['max_free_bonus_usd']}\n\n"
             "Tap a button below to edit:"
         )
         bot.edit_message_text(
@@ -478,6 +479,7 @@ def register(bot: telebot.TeleBot):
             f"{product['description']}\n\n"
             f"💎 Cost: ${product.get('price_usd', 0.0):.2f}\n"
             f"📌 Active: {'Yes' if product['active'] else 'No'}\n"
+            f"🛒 Bulk Discounts: {'Enabled' if product.get('bulk_discount_enabled') else 'Disabled'}\n"
             f"{stock_line}\n"
             f"📅 Created: {format_datetime(product.get('created_at'))}"
         )
@@ -486,7 +488,7 @@ def register(bot: telebot.TeleBot):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
-            reply_markup=admin_product_actions_kb(pid, product["active"], is_num, product.get("requires_qr", False)),
+            reply_markup=admin_product_actions_kb(pid, product["active"], is_num, product.get("requires_qr", False), product.get("bulk_discount_enabled", False)),
         )
         bot.answer_callback_query(call.id)
 
@@ -505,6 +507,45 @@ def register(bot: telebot.TeleBot):
         bot.answer_callback_query(call.id, f"Product {status}.", show_alert=True)
         # Refresh the view
         cb_admin_view_product(call)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:toggle_bulk:"))
+    def cb_toggle_bulk_discount(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        pid = call.data.split(":")[2]
+        product = get_product(pid)
+        if not product:
+            bot.answer_callback_query(call.id, "Not found.", show_alert=True)
+            return
+        new_bulk = not product.get("bulk_discount_enabled", False)
+        update_product(pid, {"$set": {"bulk_discount_enabled": new_bulk}})
+        status = "enabled" if new_bulk else "disabled"
+        bot.answer_callback_query(call.id, f"Bulk discounts {status}.", show_alert=True)
+        cb_admin_view_product(call)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:edit_bulk:"))
+    def cb_edit_bulk_discount(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        pid = call.data.split(":")[2]
+        user_states.set(call.from_user.id, {
+            "action": "admin_edit_bulk_discount",
+            "product_id": pid
+        })
+        text = (
+            "📝 <b>Edit Bulk Discount Tiers</b>\n\n"
+            "Send the bulk discount tiers format. For example:\n"
+            "<code>1-4 codes -> $3.00 each\n"
+            "5+ codes -> $2.50 each</code>\n\n"
+            "The bot will automatically parse the numbers and apply the price per item based on the quantity purchased."
+        )
+        bot.send_message(
+            call.message.chat.id,
+            text,
+            parse_mode="HTML",
+            reply_markup=admin_back_kb()
+        )
+        bot.answer_callback_query(call.id)
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("admprod:delete:"))
     def cb_delete_product(call: telebot.types.CallbackQuery):
@@ -714,7 +755,108 @@ def register(bot: telebot.TeleBot):
         )
         bot.answer_callback_query(call.id)
 
+    # ── Global Bulk Import ───────────────────────────────────────────
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:bulk_import")
+    def cb_bulk_import(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        user_states.set(call.from_user.id, {
+            "action": "admin_bulk_import",
+            "pending_stock": {},
+            "file_count": 0
+        })
+        bot.edit_message_text(
+            "📥 <b>Global Bulk Import</b>\n\n"
+            "Please upload one or more <b>.csv</b> files containing your links.\n"
+            "The bot will auto-detect the products by the `Name/URL` column.\n\n"
+            "When you are finished uploading files, click <b>Process Uploads</b>.",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=bulk_stock_upload_kb(),
+        )
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:bulk_process")
+    def cb_bulk_process(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        state = user_states.get(call.from_user.id)
+        if not state or state.get("action") != "admin_bulk_import":
+            bot.answer_callback_query(call.id, "Session expired.", show_alert=True)
+            return
+        
+        pending = state.get("pending_stock", {})
+        if not pending:
+            bot.answer_callback_query(call.id, "No valid links detected in uploaded files.", show_alert=True)
+            return
+            
+        summary = ["✅ <b>Review Stock Updates</b>\n"]
+        total_links = 0
+        for product_id, data in pending.items():
+            count = len(data["links"])
+            total_links += count
+            summary.append(f"• <b>{data['name']}</b>: +{count} links")
+            
+        summary.append(f"\nTotal new links to add: <b>{total_links}</b>\n\nProceed to update stock?")
+        
+        bot.edit_message_text(
+            "\n".join(summary),
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=bulk_stock_confirm_kb(),
+        )
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:bulk_confirm")
+    def cb_bulk_confirm(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        state = user_states.get(call.from_user.id)
+        if not state or state.get("action") != "admin_bulk_import":
+            bot.answer_callback_query(call.id, "Session expired.", show_alert=True)
+            return
+            
+        pending = state.get("pending_stock", {})
+        added_summary = ["✅ <b>Stock Updated Successfully!</b>\n"]
+        
+        for product_id, data in pending.items():
+            added, dups = add_stock_items(product_id, data["links"], allow_duplicates=False)
+            added_summary.append(f"• <b>{data['name']}</b>: {added} added (skipped {dups} dups)")
+            
+            # Optionally trigger broadcast if there is a broadcast function available here
+            # For simplicity, we just add the stock. The document handler in states_handler can handle broadcasts if needed,
+            # but usually it's handled there. Since we moved it here, we will just show the summary.
+            
+        user_states.clear(call.from_user.id)
+        
+        bot.edit_message_text(
+            "\n".join(added_summary),
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=admin_back_kb(),
+        )
+        bot.answer_callback_query(call.id, "Stock updated successfully.")
+
+    @bot.callback_query_handler(func=lambda c: c.data == "adm:bulk_cancel")
+    def cb_bulk_cancel(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        user_states.clear(call.from_user.id)
+        # return to admin panel
+        bot.edit_message_text(
+            "🔧 <b>Admin Panel</b>",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=admin_panel_kb(is_maintenance_mode(), is_referral_enabled()),
+        )
+        bot.answer_callback_query(call.id)
+
     # ╔══════════════════════════════════════════════════════════════════╗
+
     # ║  PENDING PAYMENTS                                                ║
     # ╚══════════════════════════════════════════════════════════════════╝
     @bot.callback_query_handler(func=lambda c: c.data == "adm:pending_payments")
@@ -1288,11 +1430,11 @@ def register(bot: telebot.TeleBot):
             ref_config = get_referral_config()
             referral_labels = {
                 "referral_points_per_credit": "🔢 Points per Credit",
-                "referral_max_free_credits": "🎯 Max Free Bonus",
+                "referral_max_free_bonus_usd": "🎯 Max Free Bonus",
             }
             referral_config_keys = {
                 "referral_points_per_credit": "points_per_credit",
-                "referral_max_free_credits": "max_free_credits",
+                "referral_max_free_bonus_usd": "max_free_bonus_usd",
             }
             label = referral_labels.get(setting_key, setting_key)
             current = ref_config.get(referral_config_keys.get(setting_key, ""), "N/A")

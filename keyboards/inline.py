@@ -235,6 +235,7 @@ def admin_panel_kb(is_maintenance: bool = False, is_referral: bool = True) -> In
     )
     kb.add(
         InlineKeyboardButton("📦 Delivery Settings", callback_data="adm:delivery_settings"),
+        InlineKeyboardButton("📥 Global Bulk Import", callback_data="adm:bulk_import"),
     )
     
     maint_label = "🟢 Maintenance: ON" if is_maintenance else "🔴 Maintenance: OFF"
@@ -393,8 +394,8 @@ def referral_settings_kb(ref_config: dict, is_conversion_on: bool = True, is_wel
             callback_data="admset:referral_points_per_credit",
         ),
         InlineKeyboardButton(
-            f"🎯 Max Free Bonus: {ref_config['max_free_credits']}",
-            callback_data="admset:referral_max_free_credits",
+            f"🎯 Max Free Bonus: ${ref_config['max_free_bonus_usd']}",
+            callback_data="admset:referral_max_free_bonus_usd",
         ),
     )
     kb.add(InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"))
@@ -434,7 +435,7 @@ def admin_products_list_kb(products: list[dict]) -> InlineKeyboardMarkup:
     return kb
 
 
-def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: bool = False, requires_qr: bool = False) -> InlineKeyboardMarkup:
+def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: bool = False, requires_qr: bool = False, bulk_enabled: bool = False) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     toggle_label = "🔴 Disable" if is_active else "🟢 Enable"
     toggle_cb = f"admprod:toggle:{product_id}"
@@ -473,6 +474,13 @@ def admin_product_actions_kb(product_id: str, is_active: bool, is_numerical: boo
     kb.add(
         InlineKeyboardButton("⏳ Edit Expire Days", callback_data=f"admprod:edit_expdays:{product_id}")
     )
+    
+    bulk_label = "🟢 Bulk Discounts: ON" if bulk_enabled else "🔴 Bulk Discounts: OFF"
+    kb.add(
+        InlineKeyboardButton(bulk_label, callback_data=f"admprod:toggle_bulk:{product_id}"),
+        InlineKeyboardButton("📝 Edit Bulk Tiers", callback_data=f"admprod:edit_bulk:{product_id}"),
+    )
+    
     kb.add(InlineKeyboardButton("🔙 Back", callback_data="adm:manage_products"))
     return kb
 
@@ -483,5 +491,23 @@ def admin_stock_type_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton("🔗 Links / Coupons", callback_data="admprod:stock_type:links"),
         InlineKeyboardButton("🔢 Numerical Service", callback_data="admprod:stock_type:numerical"),
         InlineKeyboardButton("🔙 Cancel", callback_data="adm:panel")
+    )
+    return kb
+
+def bulk_stock_upload_kb() -> InlineKeyboardMarkup:
+    """Keyboard for global bulk stock upload state."""
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("✅ Process Uploads", callback_data="adm:bulk_process"),
+        InlineKeyboardButton("❌ Cancel", callback_data="adm:bulk_cancel")
+    )
+    return kb
+
+def bulk_stock_confirm_kb() -> InlineKeyboardMarkup:
+    """Keyboard to confirm bulk stock updates after review."""
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("✅ Confirm Updates", callback_data="adm:bulk_confirm"),
+        InlineKeyboardButton("❌ Cancel", callback_data="adm:bulk_cancel")
     )
     return kb

@@ -159,6 +159,8 @@ def create_product(name: str, description: str, price_usd: float, is_numerical: 
         "numerical_stock": numerical_stock,
         "requires_qr": requires_qr,
         "delivery_message": "",
+        "bulk_discount_enabled": False,
+        "bulk_discount_text": "",
         "created_at": datetime.now(timezone.utc),
     }
     result = products_col.insert_one(doc)

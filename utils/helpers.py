@@ -170,3 +170,44 @@ def btn_config(key: str, default_text: str, default_emoji: str = "", default_sty
         btn_kwargs["icon_custom_emoji_id"] = emoji_id
         
     return btn_kwargs
+
+
+def calculate_bulk_price(qty: int, default_price: float, bulk_text: str) -> float:
+    """
+    Parse bulk discount text to find the appropriate unit price for a given quantity.
+    Format examples:
+    1-9 codes -> $2.00 each
+    10+ -> $1.90
+    """
+    if not bulk_text or not bulk_text.strip():
+        return default_price
+
+    try:
+        import re
+        for line in bulk_text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+                
+            qty_match = re.match(r'^(\d+)\s*(?:-\s*(\d+)|\+)', line)
+            if not qty_match:
+                continue
+                
+            min_q = int(qty_match.group(1))
+            max_q = int(qty_match.group(2)) if qty_match.group(2) else float('inf')
+            
+            # Find all numbers in the line (e.g. 1.90, 2)
+            numbers = re.findall(r'\d+\.\d+|\d+', line)
+            if not numbers:
+                continue
+            
+            # Assume the last number in the line is the price
+            price = float(numbers[-1])
+            
+            if min_q <= qty <= max_q:
+                return price
+                
+        return default_price
+    except Exception as e:
+        logger.error(f"Error parsing bulk price: {e}")
+        return default_price

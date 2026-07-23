@@ -156,10 +156,15 @@ def register(bot: telebot.TeleBot):
             return
 
         stock = get_available_stock_count(str(product['_id']))
+        bulk_text = ""
+        if product.get("bulk_discount_enabled") and product.get("bulk_discount_text"):
+            bulk_text = f"\n\n<b>Bulk Discounts:</b>\n{product['bulk_discount_text']}"
+            
         text = (
             f"📦 <b>{product['name']}</b>\n\n"
             f"{product['description']}\n\n"
-            f"💎 <b>Cost:</b> ${product.get('price_usd', 0.0):.2f}\n"
+            f"💎 <b>Cost:</b> ${product.get('price_usd', 0.0):.2f}"
+            f"{bulk_text}\n\n"
             f"📦 <b>In Stock:</b> {stock}"
         )
         bot.edit_message_text(
@@ -228,8 +233,13 @@ def register(bot: telebot.TeleBot):
             "max_stock": stock,
         })
         
+        bulk_text = ""
+        if product.get("bulk_discount_enabled") and product.get("bulk_discount_text"):
+            bulk_text = f"<b>Bulk Discounts Available:</b>\n{product['bulk_discount_text']}\n\n"
+
         bot.edit_message_text(
             f"🛒 <b>{product['name']}</b>\n\n"
+            f"{bulk_text}"
             f"How many would you like to buy?\n"
             f"(Available stock: {stock})\n\n"
             "<i>Please type a number below:</i>",

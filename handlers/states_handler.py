@@ -33,21 +33,30 @@ import threading
 import time
 
 def _run_broadcast_new_stock(bot: telebot.TeleBot, product_name: str, added_count: int, product_id: str):
-    from database import get_all_user_ids, get_available_stock_count
+    from database import get_all_user_ids, get_available_stock_count, get_product
     
     total_stock = get_available_stock_count(product_id)
+    product = get_product(product_id)
+    if not product: return
+    
     msg_text = (
-        f"📢 <b>New Stock Added!</b>\n\n"
-        f"📦 Product: <b>{product_name}</b>\n"
-        f"✅ New Links Added: <b>{added_count}</b>\n"
-        f"📊 Total Available: <b>{total_stock}</b>\n\n"
-        "Head to the <b>🛒 BUY</b> menu to get yours now!"
+        f"📦 <b>{added_count} new {product_name} added!</b>\n\n"
+        f"💝 <b>Product:</b> {product_name}\n"
+        f"✅ <b>Available:</b> {total_stock} items\n"
+        f"💰 <b>Price:</b> ${product.get('price_usd', 0.0):.2f} USDT\n\n"
     )
+    if product.get("bulk_discount_enabled") and product.get("bulk_discount_text"):
+        msg_text += f"<b>Bulk Discounts:</b>\n{product['bulk_discount_text']}\n\n"
+        
+    msg_text += "Tap Buy Now to purchase!"
+    
+    kb = telebot.types.InlineKeyboardMarkup()
+    kb.add(telebot.types.InlineKeyboardButton("🛍 Buy Now", callback_data=f"prod:buy:{product_id}"))
     
     all_ids = get_all_user_ids()
     for uid in all_ids:
         try:
-            msg = bot.send_message(uid, msg_text, parse_mode="HTML")
+            msg = bot.send_message(uid, msg_text, parse_mode="HTML", reply_markup=kb)
             from database import schedule_message_cleanup
             schedule_message_cleanup(uid, msg.message_id, hours=24)
         except Exception:
@@ -195,6 +204,11 @@ def register(bot: telebot.TeleBot):
             _handle_admin_edit_product(bot, message, state, text, html_text)
             return
 
+        # ── ADMIN: Edit Bulk Discount ────────────────────────────────
+        if action == "admin_edit_bulk_discount" and is_admin(user_id):
+            _handle_admin_edit_bulk_discount(bot, message, state, text)
+            return
+
         # ── ADMIN: Send Gift Code Privately ──────────────────────────
         if action == "admin_gift_send_private" and is_admin(user_id):
             _handle_gift_send_private(bot, message, state, text)
@@ -214,6 +228,97 @@ def register(bot: telebot.TeleBot):
         if action in ("admin_ui_set_text", "admin_ui_set_emoji") and is_admin(user_id):
             _handle_admin_ui_input(bot, message, state, text)
             return
+
+    # ── Document handler for Global Bulk CSV uploads ────────────────────
+    @bot.message_handler(
+        content_types=["document"],
+        func=lambda m: user_states.has(m.from_user.id)
+            and user_states.get(m.from_user.id, {}).get("action") == "admin_bulk_import"
+            and is_admin(m.from_user.id),
+    )
+    def handle_global_bulk_csv_upload(message: telebot.types.Message):
+        user_id = message.from_user.id
+        state = user_states.get(user_id)
+        if not state:
+            return
+
+        doc = message.document
+        file_name = doc.file_name or ""
+        if not file_name.lower().endswith(".csv"):
+            bot.send_message(user_id, "❌ Please upload a <b>.csv</b> file.", parse_mode="HTML")
+            return
+
+        try:
+            file_info = bot.get_file(doc.file_id)
+            downloaded = bot.download_file(file_info.file_path)
+            file_content = downloaded.decode("utf-8", errors="ignore")
+        except Exception as exc:
+            bot.send_message(user_id, f"❌ Failed to download file: {exc}")
+            return
+
+        from database import get_active_products
+        from utils.helpers import validate_link
+        from keyboards.inline import bulk_stock_upload_kb
+        products = get_active_products()
+        product_map = {p["name"].lower(): str(p["_id"]) for p in products}
+
+        reader = csv.DictReader(io.StringIO(file_content))
+        fieldnames = reader.fieldnames or []
+        
+        name_col = next((c for c in fieldnames if "name" in c.lower() or "url" in c.lower()), None)
+        link_col = next((c for c in fieldnames if "redeem" in c.lower() or "link" in c.lower()), None)
+        if link_col == name_col and link_col is not None:
+            link_col = next((c for c in fieldnames if "redeem" in c.lower() or "link" in c.lower() and c != name_col), None)
+            
+        if not name_col or not link_col:
+            bot.send_message(
+                user_id,
+                f"❌ Could not find `Name/URL` or `Redeem Link` columns in CSV headers: {fieldnames}\n"
+                "Please make sure your CSV contains these columns.",
+                reply_markup=bulk_stock_upload_kb()
+            )
+            return
+
+        pending = state.get("pending_stock", {})
+        matched_count = 0
+        unmatched_count = 0
+        
+        for row in reader:
+            name_val = row.get(name_col, "").strip()
+            link_val = row.get(link_col, "").strip()
+            if not name_val or not link_val:
+                continue
+                
+            if validate_link(link_val):
+                matched_pid = None
+                for pname_lower, pid in product_map.items():
+                    if name_val.lower() in pname_lower or pname_lower in name_val.lower():
+                        matched_pid = pid
+                        break
+                        
+                if matched_pid:
+                    if matched_pid not in pending:
+                        prod = next(p for p in products if str(p["_id"]) == matched_pid)
+                        pending[matched_pid] = {"name": prod["name"], "links": []}
+                    pending[matched_pid]["links"].append(link_val)
+                    matched_count += 1
+                else:
+                    unmatched_count += 1
+
+        state["pending_stock"] = pending
+        state["file_count"] = state.get("file_count", 0) + 1
+        user_states.set(user_id, state)
+        
+        bot.send_message(
+            user_id,
+            f"📄 <b>File Processed:</b> {file_name}\n"
+            f"✅ Matched Links: <b>{matched_count}</b>\n"
+            f"❌ Unmatched (No product found): <b>{unmatched_count}</b>\n\n"
+            f"Total files uploaded: {state['file_count']}\n"
+            "Upload another file, or click <b>Process Uploads</b>.",
+            parse_mode="HTML",
+            reply_markup=bulk_stock_upload_kb()
+        )
 
     # ── Document handler for CSV stock uploads ───────────────────────
     @bot.message_handler(
@@ -553,14 +658,21 @@ def _handle_payment_submission(
         elif intent == "direct_pay":
             # For direct pay, deliver the product directly
             from handlers.products import process_direct_pay_delivery
-            process_direct_pay_delivery(bot, user_id, state.get("product_id"), state.get("amount_usd", 0.0), state["method"])
+            from database import get_product
+            
+            product_id = state.get("product_id")
+            prod = get_product(product_id) if product_id else None
+            prod_name = prod["name"] if prod else "Unknown Product"
+            
+            process_direct_pay_delivery(bot, user_id, product_id, state.get("amount_usd", 0.0), state["method"])
             
             # Notify admin of auto-approval
             txn = binance_order_id or bep20_tx_id or "N/A"
             admin_text = (
-                "✅ <b>Auto-Approved Direct Pay</b>\n\n"
+                f"✅ <b>This ({prod_name}) product purchased via direct pay</b>\n\n"
                 f"👤 User ID: <code>{user_id}</code>\n"
                 f"👤 Username: @{username}\n"
+                f"📦 Product: <b>{prod_name}</b>\n"
                 f"💰 Method: {state['method']}\n"
                 f"💵 Amount: ${state.get('amount_usd', 0.0):.2f}\n"
                 f"🔢 Order/TxID: <code>{txn}</code>"
@@ -684,6 +796,34 @@ def _handle_add_product_step(
             parse_mode="HTML",
             reply_markup=admin_panel_kb(),
         )
+
+def _handle_admin_edit_bulk_discount(
+    bot: telebot.TeleBot,
+    message: telebot.types.Message,
+    state: dict,
+    text: str,
+):
+    from database import update_product
+    from keyboards.inline import admin_back_kb
+
+    product_id = state.get("product_id")
+    if text.strip().lower() == "off":
+        update_product(product_id, {"$set": {"bulk_discount_enabled": False}})
+        bot.send_message(
+            message.chat.id,
+            "✅ Bulk discounts have been disabled for this product.",
+            reply_markup=admin_back_kb()
+        )
+    else:
+        update_product(product_id, {"$set": {"bulk_discount_text": text}})
+        bot.send_message(
+            message.chat.id,
+            "✅ Bulk discount tiers updated successfully!",
+            reply_markup=admin_back_kb()
+        )
+    
+    from utils.states import user_states
+    user_states.clear(message.from_user.id)
 
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║  ADMIN: Edit product                                                ║
@@ -1295,7 +1435,13 @@ def _handle_buy_quantity(
         return
 
     user = get_user(user_id)
-    total_cost_usd = product.get("price_usd", 0.0) * qty
+    
+    if product.get("bulk_discount_enabled"):
+        from utils.helpers import calculate_bulk_price
+        unit_price = calculate_bulk_price(qty, product.get("price_usd", 0.0), product.get("bulk_discount_text", ""))
+        total_cost_usd = unit_price * qty
+    else:
+        total_cost_usd = product.get("price_usd", 0.0) * qty
 
     # We do not strictly check for balance here because they can use Direct Pay
     # The actual balance check will happen if they choose "Pay via Wallet"
@@ -1616,7 +1762,7 @@ def _handle_edit_setting(
         return
 
     # Handle referral config keys separately (need integer validation + dedicated storage)
-    if setting_key in ("referral_points_per_credit", "referral_max_free_credits"):
+    if setting_key in ("referral_points_per_credit", "referral_max_free_bonus_usd"):
         try:
             int_val = int(text)
             if int_val <= 0:
@@ -1631,7 +1777,7 @@ def _handle_edit_setting(
         if setting_key == "referral_points_per_credit":
             set_referral_config(points_per_credit=int_val)
         else:
-            set_referral_config(max_free_credits=int_val)
+            set_referral_config(max_free_bonus_usd=int_val)
 
         user_states.clear(user_id)
         logger.info("Referral config updated: %s = %s", setting_key, int_val)
