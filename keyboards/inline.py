@@ -516,3 +516,13 @@ def bulk_stock_confirm_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton("❌ Cancel", callback_data="adm:bulk_cancel")
     )
     return kb
+
+def gift_code_type_kb() -> InlineKeyboardMarkup:
+    """Keyboard for selecting gift code reward type."""
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("💰 Points", callback_data="admgift:type:points"),
+        InlineKeyboardButton("🔗 Link / Coupon", callback_data="admgift:type:link")
+    )
+    kb.add(InlineKeyboardButton("🔙 Cancel", callback_data="adm:panel"))
+    return kb

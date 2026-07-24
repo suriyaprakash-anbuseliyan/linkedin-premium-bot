@@ -626,11 +626,13 @@ def set_welcome_bonus_enabled(enabled: bool) -> None:
 # ║  GIFT CODES helpers                                                  ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def create_gift_code(code: str, points_value: int, max_uses: int, expires_at: datetime | None, created_by: int) -> None:
-    """Creates a new gift code that gives points."""
+def create_gift_code(code: str, points_value: int, max_uses: int, expires_at: datetime | None, created_by: int, reward_type: str = "points", reward_content: str = "") -> None:
+    """Creates a new gift code that gives points or a link/coupon."""
     doc = {
         "code": code,
         "points": points_value,
+        "reward_type": reward_type,
+        "reward_content": reward_content,
         "max_uses": max_uses,
         "current_uses": 0,
         "expires_at": expires_at,
@@ -646,24 +648,24 @@ def get_gift_code(code: str) -> dict | None:
     return gift_codes_col.find_one({"code": code})
 
 
-def redeem_gift_code(code: str, user_id: int) -> bool | str:
+def redeem_gift_code(code: str, user_id: int) -> tuple[bool, dict | str]:
     """
     Attempts to redeem a gift code for a user.
-    Returns True if successful. Returns error string if it fails.
-    Gift codes give points (referral_points), not credits.
+    Returns (True, dict) if successful. Returns (False, error string) if it fails.
+    Gift codes give points (referral_points) or a link.
     """
     code_doc = gift_codes_col.find_one({"code": code})
     if not code_doc:
-        return "Invalid code."
+        return False, "Invalid code."
         
     if code_doc["current_uses"] >= code_doc["max_uses"]:
-        return "This code has reached its maximum usage limit."
+        return False, "This code has reached its maximum usage limit."
         
     if code_doc["expires_at"] and datetime.now(timezone.utc) > code_doc["expires_at"].replace(tzinfo=timezone.utc):
-        return "This code has expired."
+        return False, "This code has expired."
         
     if user_id in code_doc.get("redeemed_by", []):
-        return "You have already redeemed this code."
+        return False, "You have already redeemed this code."
         
     # Atomically update usage
     result = gift_codes_col.update_one(
@@ -675,14 +677,18 @@ def redeem_gift_code(code: str, user_id: int) -> bool | str:
     )
     
     if result.modified_count == 1:
-        # Give points (referral_points), not credits
-        users_col.update_one(
-            {"user_id": user_id},
-            {"$inc": {"referral_points": code_doc["points"]}}
-        )
-        return True
+        reward_type = code_doc.get("reward_type", "points")
+        if reward_type == "points":
+            # Give points (referral_points), not credits
+            users_col.update_one(
+                {"user_id": user_id},
+                {"$inc": {"referral_points": code_doc["points"]}}
+            )
+            return True, {"type": "points", "value": code_doc["points"]}
+        else:
+            return True, {"type": "link", "value": code_doc.get("reward_content", "")}
         
-    return "Failed to redeem code. Please try again."
+    return False, "Failed to redeem code. Please try again."
 
 def search_database(query: str) -> dict:
     """Search for a link in stock_col or a code in gift_codes_col."""
