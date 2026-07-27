@@ -141,6 +141,10 @@ def register(bot: telebot.TeleBot):
             _handle_gift_gen_link(bot, message, state, text)
             return
             
+        if action == "awaiting_gift_gen_delmsg" and is_admin(user_id):
+            _handle_gift_gen_delmsg(bot, message, state, text)
+            return
+            
         if action == "awaiting_gift_gen_uses" and is_admin(user_id):
             _handle_gift_gen_uses(bot, message, state, text)
             return
@@ -687,13 +691,14 @@ def _handle_payment_submission(
             )
             
             # Notify admin of auto-approval
+            txn = binance_order_id or bep20_tx_id or "N/A"
             admin_text = (
                 "✅ <b>Auto-Approved Top-up</b>\n\n"
                 f"👤 User ID: <code>{user_id}</code>\n"
                 f"👤 Username: @{username}\n"
                 f"💰 Method: {state['method']}\n"
                 f"💵 Amount: ${state.get('amount_usd', 0.0):.2f}\n"
-                f"🔢 Order ID: <code>{binance_order_id}</code>"
+                f"🔢 Order/TxID: <code>{txn}</code>"
             )
         elif intent == "direct_pay":
             # For direct pay, deliver the product directly
@@ -1296,17 +1301,26 @@ def _handle_redeem_gift_code(bot: telebot.TeleBot, message: telebot.types.Messag
     result_success, result_data = redeem_gift_code(code, user_id)
     
     if result_success:
+        del_msg = result_data.get("delivery_message", "")
         if result_data.get("type") == "points":
+            final_msg = f"🎉 <b>Success!</b>\n\nYour gift code has been redeemed and <b>{result_data.get('value')} points</b> have been added to your account."
+            if del_msg:
+                final_msg += f"\n\n<b>Message from Admin:</b>\n{del_msg}"
+            
             msg = bot.send_message(
                 user_id,
-                f"🎉 <b>Success!</b>\n\nYour gift code has been redeemed and <b>{result_data.get('value')} points</b> have been added to your account.",
+                final_msg,
                 parse_mode="HTML",
                 reply_markup=back_to_menu_kb()
             )
         else:
+            final_msg = f"🎉 <b>Success!</b>\n\nYou received a reward:\n\n<code>{result_data.get('value')}</code>"
+            if del_msg:
+                final_msg = f"🎉 <b>Success!</b>\n\n{del_msg}\n\n<code>{result_data.get('value')}</code>"
+                
             msg = bot.send_message(
                 user_id,
-                f"🎉 <b>Success!</b>\n\nYou received a reward:\n\n{result_data.get('value')}",
+                final_msg,
                 parse_mode="HTML",
                 reply_markup=back_to_menu_kb()
             )
@@ -1340,12 +1354,14 @@ def _handle_gift_gen_credits(bot: telebot.TeleBot, message: telebot.types.Messag
         return
         
     state["points"] = points_val
-    state["action"] = "awaiting_gift_gen_uses"
+    state["action"] = "awaiting_gift_gen_delmsg"
     user_states.set(message.from_user.id, state)
     
     bot.send_message(
         message.chat.id,
-        "🎁 How many users can redeem this code? (Enter a number, e.g., 1 for single-use, 100 for multi-use):",
+        "🎁 <b>Custom Message</b>\n\nPlease send a custom delivery message the user will see when they redeem this code.\n\n"
+        "<i>Or send /skip to use the default message.</i>",
+        parse_mode="HTML",
         reply_markup=admin_back_kb()
     )
 
@@ -1355,6 +1371,23 @@ def _handle_gift_gen_link(bot: telebot.TeleBot, message: telebot.types.Message, 
         return
         
     state["reward_content"] = text.strip()
+    state["action"] = "awaiting_gift_gen_delmsg"
+    user_states.set(message.from_user.id, state)
+    
+    bot.send_message(
+        message.chat.id,
+        "🎁 <b>Custom Message</b>\n\nPlease send a custom delivery message the user will see when they redeem this code.\n\n"
+        "<i>Or send /skip to use the default message.</i>",
+        parse_mode="HTML",
+        reply_markup=admin_back_kb()
+    )
+
+def _handle_gift_gen_delmsg(bot: telebot.TeleBot, message: telebot.types.Message, state: dict, text: str):
+    if text.strip() == "/skip":
+        state["delivery_message"] = ""
+    else:
+        state["delivery_message"] = text.strip()
+        
     state["action"] = "awaiting_gift_gen_uses"
     user_states.set(message.from_user.id, state)
     
@@ -1427,6 +1460,7 @@ def _handle_gift_gen_expiry(bot: telebot.TeleBot, message: telebot.types.Message
     
     reward_type = state.get("reward_type", "points")
     reward_content = state.get("reward_content", "")
+    delivery_message = state.get("delivery_message", "")
     
     create_gift_code(
         code=code,
@@ -1435,7 +1469,8 @@ def _handle_gift_gen_expiry(bot: telebot.TeleBot, message: telebot.types.Message
         expires_at=expires_at,
         created_by=message.from_user.id,
         reward_type=reward_type,
-        reward_content=reward_content
+        reward_content=reward_content,
+        delivery_message=delivery_message
     )
     
     user_states.clear(message.from_user.id)
@@ -1452,14 +1487,24 @@ def _handle_gift_gen_expiry(bot: telebot.TeleBot, message: telebot.types.Message
     
     reward_display = f"🏆 Points: <b>{state.get('points', 0)}</b>\n" if reward_type == "points" else f"🔗 Link: <code>{reward_content}</code>\n"
     
+    from database import get_delivery_settings
+    del_settings = get_delivery_settings()
+    msg_template = del_settings.get("gift_code_broadcast_msg", 
+        "🎉 <b>YOUR EXCLUSIVE GIFT CODE IS READY!</b> 🎁\n\n"
+        "🎟 <code>{code}</code>\n"
+        "📋 Tap to Copy\n\n"
+        "{reward_display}"
+        "⏳ Expires in {expiry_str}\n"
+        "⚡ Redeem fast  !!!  before it disappears 🚀"
+    )
+    
+    formatted_msg = msg_template.replace("{code}", str(code))\
+                                .replace("{reward_display}", reward_display)\
+                                .replace("{expiry_str}", expiry_str)
+
     bot.send_message(
         message.chat.id,
-        f"🎉 <b>YOUR EXCLUSIVE GIFT CODE IS READY!</b> 🎁\n\n"
-        f"🎟 <code>{code}</code>\n"
-        f"📋 Tap to Copy\n\n"
-        f"{reward_display}"
-        f"⏳ Expires in {expiry_str}\n"
-        f"⚡ Redeem fast  !!!  before it disappears 🚀",
+        formatted_msg,
         parse_mode="HTML",
         reply_markup=gift_code_actions_kb(code)
     )
@@ -1792,6 +1837,10 @@ def _handle_admin_delivery_settings(
         val = html_text if html_text else text
         update_data["expiration_warning"] = val.strip()
         field_name = "Expiration Warning Text"
+    elif action == "admin_set_del_gift_code_msg":
+        val = html_text if html_text else text
+        update_data["gift_code_broadcast_msg"] = val.strip()
+        field_name = "Gift Code Output Message"
 
     update_delivery_settings(update_data)
     user_states.clear(user_id)
@@ -1803,6 +1852,7 @@ def _handle_admin_delivery_settings(
         f"<b>Global Delivery Message:</b>\n<code>{del_settings['global_message']}</code>\n\n"
         f"<b>Expiration Days (for new stock):</b> <code>{del_settings['expiration_days']}</code>\n\n"
         f"<b>Expiration Warning Text:</b>\n<code>{del_settings['expiration_warning']}</code>\n\n"
+        f"<b>Gift Code Output Message:</b>\n<code>{del_settings.get('gift_code_broadcast_msg', 'Default')}</code>\n\n"
         "Tap a button below to edit:"
     )
     bot.send_message(

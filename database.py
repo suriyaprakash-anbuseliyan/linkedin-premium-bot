@@ -507,7 +507,15 @@ def get_delivery_settings() -> dict:
     return {
         "global_message": doc.get("global_message", "Thank you for your purchase! 🎉"),
         "expiration_days": doc.get("expiration_days", 7),
-        "expiration_warning": doc.get("expiration_warning", "⚠️ <i>Use these links within {days} days before they expire.</i>")
+        "expiration_warning": doc.get("expiration_warning", "⚠️ <i>Use these links within {days} days before they expire.</i>"),
+        "gift_code_broadcast_msg": doc.get("gift_code_broadcast_msg", 
+            "🎉 <b>YOUR EXCLUSIVE GIFT CODE IS READY!</b> 🎁\n\n"
+            "🎟 <code>{code}</code>\n"
+            "📋 Tap to Copy\n\n"
+            "{reward_display}"
+            "⏳ Expires in {expiry_str}\n"
+            "⚡ Redeem fast  !!!  before it disappears 🚀"
+        )
     }
 
 def update_delivery_settings(update_data: dict) -> None:
@@ -626,13 +634,14 @@ def set_welcome_bonus_enabled(enabled: bool) -> None:
 # ║  GIFT CODES helpers                                                  ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-def create_gift_code(code: str, points_value: int, max_uses: int, expires_at: datetime | None, created_by: int, reward_type: str = "points", reward_content: str = "") -> None:
+def create_gift_code(code: str, points_value: int, max_uses: int, expires_at: datetime | None, created_by: int, reward_type: str = "points", reward_content: str = "", delivery_message: str = "") -> None:
     """Creates a new gift code that gives points or a link/coupon."""
     doc = {
         "code": code,
         "points": points_value,
         "reward_type": reward_type,
         "reward_content": reward_content,
+        "delivery_message": delivery_message,
         "max_uses": max_uses,
         "current_uses": 0,
         "expires_at": expires_at,
@@ -678,15 +687,16 @@ def redeem_gift_code(code: str, user_id: int) -> tuple[bool, dict | str]:
     
     if result.modified_count == 1:
         reward_type = code_doc.get("reward_type", "points")
+        delivery_msg = code_doc.get("delivery_message", "")
         if reward_type == "points":
             # Give points (referral_points), not credits
             users_col.update_one(
                 {"user_id": user_id},
                 {"$inc": {"referral_points": code_doc["points"]}}
             )
-            return True, {"type": "points", "value": code_doc["points"]}
+            return True, {"type": "points", "value": code_doc["points"], "delivery_message": delivery_msg}
         else:
-            return True, {"type": "link", "value": code_doc.get("reward_content", "")}
+            return True, {"type": "link", "value": code_doc.get("reward_content", ""), "delivery_message": delivery_msg}
         
     return False, "Failed to redeem code. Please try again."
 

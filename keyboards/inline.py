@@ -294,6 +294,7 @@ def admin_delivery_settings_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton("📝 Edit Global Delivery Msg", callback_data="admset:del_global_msg"),
+        InlineKeyboardButton("🎁 Edit Gift Code Output Msg", callback_data="admset:del_gift_code_msg"),
         InlineKeyboardButton("⏳ Edit Expiration Days", callback_data="admset:del_exp_days"),
         InlineKeyboardButton("⚠️ Edit Expiration Warning", callback_data="admset:del_exp_warn"),
         InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel")

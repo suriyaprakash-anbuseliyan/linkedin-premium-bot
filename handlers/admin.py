@@ -215,6 +215,7 @@ def register(bot: telebot.TeleBot):
             f"<b>Global Delivery Message:</b>\n<code>{del_settings['global_message']}</code>\n\n"
             f"<b>Expiration Days (for new stock):</b> <code>{del_settings['expiration_days']}</code>\n\n"
             f"<b>Expiration Warning Text:</b>\n<code>{del_settings['expiration_warning']}</code>\n\n"
+            f"<b>Gift Code Output Message:</b>\n<code>{del_settings.get('gift_code_broadcast_msg', 'Default')}</code>\n\n"
             "Tap a button below to edit:"
         )
         bot.edit_message_text(
@@ -243,6 +244,9 @@ def register(bot: telebot.TeleBot):
         elif setting_type == "del_exp_warn":
             prompt = "⚠️ <b>Edit Expiration Warning Text</b>\n\nSend the new expiration warning message (HTML supported).\nUse <code>{days}</code> as a placeholder for the number of days."
             action = "admin_set_del_exp_warn"
+        elif setting_type == "del_gift_code_msg":
+            prompt = "🎁 <b>Edit Gift Code Output Msg</b>\n\nSend the new output message (HTML supported).\nUse <code>{code}</code>, <code>{reward_display}</code>, and <code>{expiry_str}</code> as placeholders."
+            action = "admin_set_del_gift_code_msg"
         else:
             return
             
@@ -338,13 +342,43 @@ def register(bot: telebot.TeleBot):
             bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
             return
             
-        user_states.set(call.from_user.id, {"action": "awaiting_gift_gen_credits"})
+        from keyboards.inline import gift_code_type_kb
+        
         bot.send_message(
             call.message.chat.id,
-            "🎁 <b>Generate Gift Code</b>\n\nHow many <b>points</b> should this code give to the user?\n<i>(Enter a number, e.g., 5)</i>",
+            "🎁 <b>Generate Gift Code</b>\n\nWhat type of reward should this code give?",
             parse_mode="HTML",
-            reply_markup=admin_back_kb()
+            reply_markup=gift_code_type_kb(),
         )
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("admgift:type:"))
+    def cb_gift_code_type(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            bot.answer_callback_query(call.id, "⛔ Not authorized.", show_alert=True)
+            return
+            
+        reward_type = call.data.split(":")[2]
+        
+        if reward_type == "points":
+            user_states.set(call.from_user.id, {"action": "awaiting_gift_gen_credits", "reward_type": "points"})
+            bot.edit_message_text(
+                "🎁 <b>Generate Gift Code (Points)</b>\n\nHow many <b>points</b> should this code give to the user?\n<i>(Enter a number, e.g., 5)</i>",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=admin_back_kb(),
+            )
+        else:
+            user_states.set(call.from_user.id, {"action": "awaiting_gift_gen_link", "reward_type": "link", "points": 0})
+            bot.edit_message_text(
+                "🎁 <b>Generate Gift Code (Link/Coupon)</b>\n\nPlease send the <b>link</b> or <b>coupon code</b> this gift code will reward.",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=admin_back_kb(),
+            )
+            
         bot.answer_callback_query(call.id)
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("admgift:broadcast:"))
