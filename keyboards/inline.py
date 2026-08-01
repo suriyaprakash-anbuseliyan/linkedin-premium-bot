@@ -119,6 +119,8 @@ def product_payment_method_kb(product_id: str, qty: int, price_usd: float) -> In
         buttons.append(InlineKeyboardButton("🪙 Direct Binance", callback_data=f"prod:direct:binance:{product_id}:{qty}"))
     if settings.get("bep20_enabled", True):
         buttons.append(InlineKeyboardButton("🔗 Direct BEP-20", callback_data=f"prod:direct:bep20:{product_id}:{qty}"))
+    if settings.get("trc20_enabled", True):
+        buttons.append(InlineKeyboardButton("🔗 Direct TRC-20", callback_data=f"prod:direct:trc20:{product_id}:{qty}"))
         
     for i in range(0, len(buttons), 2):
         kb.add(*buttons[i:i+2])
@@ -175,6 +177,8 @@ def payment_method_kb(amount_usd: float) -> InlineKeyboardMarkup:
         buttons.append(InlineKeyboardButton("🪙 Binance (Recommended)", callback_data=f"pay:binance:{amount_usd}"))
     if settings.get("bep20_enabled", True):
         buttons.append(InlineKeyboardButton("🔗 BEP-20 (USDT)", callback_data=f"pay:bep20:{amount_usd}"))
+    if settings.get("trc20_enabled", True):
+        buttons.append(InlineKeyboardButton("🔗 TRC-20 (USDT)", callback_data=f"pay:trc20:{amount_usd}"))
     
     if buttons:
         kb.add(*buttons)
@@ -264,13 +268,15 @@ def payment_settings_kb() -> InlineKeyboardMarkup:
     upi_status = "🟢 ON" if settings.get("upi_enabled", True) else "🔴 OFF"
     binance_status = "🟢 ON" if settings.get("binance_enabled", True) else "🔴 OFF"
     bep20_status = "🟢 ON" if settings.get("bep20_enabled", True) else "🔴 OFF"
+    trc20_status = "🟢 ON" if settings.get("trc20_enabled", True) else "🔴 OFF"
     
     kb.add(
         InlineKeyboardButton(f"💳 UPI: {upi_status}", callback_data="admset:toggle_upi"),
         InlineKeyboardButton(f"🪙 Binance: {binance_status}", callback_data="admset:toggle_binance")
     )
     kb.add(
-        InlineKeyboardButton(f"🔗 BEP-20: {bep20_status}", callback_data="admset:toggle_bep20")
+        InlineKeyboardButton(f"🔗 BEP-20: {bep20_status}", callback_data="admset:toggle_bep20"),
+        InlineKeyboardButton(f"🔗 TRC-20: {trc20_status}", callback_data="admset:toggle_trc20")
     )
     kb.add(
         InlineKeyboardButton("💳 Edit UPI ID", callback_data="admset:upi_id"),
@@ -284,7 +290,11 @@ def payment_settings_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton("🔗 Edit BEP-20 Address", callback_data="admset:bep20_address"),
     )
     kb.add(
+        InlineKeyboardButton("🔗 Edit TRC-20 Address", callback_data="admset:trc20_address"),
+    )
+    kb.add(
         InlineKeyboardButton("🖼 Upload BEP-20 QR", callback_data="admset:upload_bep20_qr"),
+        InlineKeyboardButton("🖼 Upload TRC-20 QR", callback_data="admset:upload_trc20_qr"),
     )
     kb.add(InlineKeyboardButton("🔙 Admin Panel", callback_data="adm:panel"))
     return kb

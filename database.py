@@ -477,28 +477,31 @@ def set_setting(key: str, value: str) -> None:
 
 def get_payment_settings() -> dict:
     doc = settings_col.find_one({"_id": "payment_settings"}) or {}
-    from config import UPI_ID, UPI_NAME, BINANCE_UID, BEP20_ADDRESS
+    from config import UPI_ID, UPI_NAME, BINANCE_UID, BEP20_ADDRESS, TRC20_ADDRESS
     return {
         "upi_id": get_setting("upi_id", UPI_ID),
         "upi_name": get_setting("upi_name", UPI_NAME),
         "binance_uid": get_setting("binance_uid", BINANCE_UID),
         "bep20_address": get_setting("bep20_address", BEP20_ADDRESS),
+        "trc20_address": get_setting("trc20_address", TRC20_ADDRESS),
         "upi_enabled": doc.get("upi_enabled", True),
         "binance_enabled": doc.get("binance_enabled", True),
-        "bep20_enabled": doc.get("bep20_enabled", True)
+        "bep20_enabled": doc.get("bep20_enabled", True),
+        "trc20_enabled": doc.get("trc20_enabled", True)
     }
 
 
-def update_payment_settings(upi_id: str, upi_name: str, binance_uid: str, bep20_address: str) -> None:
+def update_payment_settings(upi_id: str, upi_name: str, binance_uid: str, bep20_address: str, trc20_address: str) -> None:
     settings_col.update_one(
         {"_id": "payment_settings"},
-        {"$set": {"upi_enabled": True, "binance_enabled": True, "bep20_enabled": True}},
+        {"$set": {"upi_enabled": True, "binance_enabled": True, "bep20_enabled": True, "trc20_enabled": True}},
         upsert=True
     )
     set_setting("upi_id", upi_id)
     set_setting("upi_name", upi_name)
     set_setting("binance_uid", binance_uid)
     set_setting("bep20_address", bep20_address)
+    set_setting("trc20_address", trc20_address)
 
 
 def get_delivery_settings() -> dict:

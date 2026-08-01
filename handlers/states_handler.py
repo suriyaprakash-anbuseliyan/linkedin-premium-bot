@@ -122,6 +122,11 @@ def register(bot: telebot.TeleBot):
             _handle_payment_submission(bot, message, state, bep20_tx_id=text)
             return
 
+        # ── PAYMENT: TRC-20 TxID ─────────────────────────────────────
+        if action == "awaiting_trc20_id":
+            _handle_payment_submission(bot, message, state, trc20_tx_id=text)
+            return
+
         # ── WALLET: Enter Topup Amount ────────────────────────────
         if action == "awaiting_topup_amount":
             _handle_topup_amount_input(bot, message, text)
@@ -596,6 +601,7 @@ def _handle_payment_submission(
     utr_number: str | None = None,
     binance_order_id: str | None = None,
     bep20_tx_id: str | None = None,
+    trc20_tx_id: str | None = None,
 ):
     user_id = message.from_user.id
     username = message.from_user.username or ""
@@ -649,6 +655,30 @@ def _handle_payment_submission(
             )
             return
 
+    # Auto-verify TRC-20
+    if state["method"] == "TRC-20" and trc20_tx_id:
+        from database import check_binance_order_exists
+        if check_binance_order_exists(trc20_tx_id): 
+            bot.send_message(
+                user_id,
+                "❌ <b>Duplicate TxID</b>\nThis transaction has already been processed.\n\nPlease enter a valid, unused Transaction ID (TxID).",
+                parse_mode="HTML"
+            )
+            # Do NOT clear state
+            return
+            
+        bot.send_message(user_id, "⏳ Verifying TRC-20 transaction on Tron automatically...")
+        from utils.payments import verify_trc20_deposit_transaction
+        if verify_trc20_deposit_transaction(trc20_tx_id, state.get("amount_usd", 0.0)):
+            is_auto_verified = True
+        else:
+            bot.send_message(
+                user_id,
+                "❌ <b>Verification Failed</b>\nWe could not verify this TxID or the amount is incorrect.\n\nPlease check and enter the correct Transaction ID (TxID).",
+                parse_mode="HTML"
+            )
+            return
+
     payment_id = create_payment(
         user_id=user_id,
         username=username,
@@ -657,7 +687,7 @@ def _handle_payment_submission(
         intent=state.get("intent", "add_to_wallet"),
         product_id=state.get("product_id"),
         utr_number=utr_number,
-        binance_order_id=binance_order_id or bep20_tx_id, # store TxID here for duplication prevention
+        binance_order_id=binance_order_id or bep20_tx_id or trc20_tx_id, # store TxID here for duplication prevention
     )
     user_states.clear(user_id)
     logger.info(
@@ -691,7 +721,7 @@ def _handle_payment_submission(
             )
             
             # Notify admin of auto-approval
-            txn = binance_order_id or bep20_tx_id or "N/A"
+            txn = binance_order_id or bep20_tx_id or trc20_tx_id or "N/A"
             admin_text = (
                 "✅ <b>Auto-Approved Top-up</b>\n\n"
                 f"👤 User ID: <code>{user_id}</code>\n"
@@ -712,7 +742,7 @@ def _handle_payment_submission(
             process_direct_pay_delivery(bot, user_id, product_id, state.get("amount_usd", 0.0), state["method"])
             
             # Notify admin of auto-approval
-            txn = binance_order_id or bep20_tx_id or "N/A"
+            txn = binance_order_id or bep20_tx_id or trc20_tx_id or "N/A"
             admin_text = (
                 f"✅ <b>This ({prod_name}) product purchased via direct pay</b>\n\n"
                 f"👤 User ID: <code>{user_id}</code>\n"
@@ -738,8 +768,8 @@ def _handle_payment_submission(
     )
 
     # Notify admin
-    txn = utr_number or binance_order_id or bep20_tx_id or "N/A"
-    txn_label = "UTR Number" if state["method"] == "UPI" else ("TxID" if state["method"] == "BEP-20" else "Binance Order ID")
+    txn = utr_number or binance_order_id or bep20_tx_id or trc20_tx_id or "N/A"
+    txn_label = "UTR Number" if state["method"] == "UPI" else ("TxID" if state["method"] in ("BEP-20", "TRC-20") else "Binance Order ID")
     admin_text = (
         "🔔 <b>New Payment Request (Needs Review)</b>\n\n"
         f"👤 User ID: <code>{user_id}</code>\n"

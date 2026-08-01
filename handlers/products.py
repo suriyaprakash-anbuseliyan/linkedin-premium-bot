@@ -592,6 +592,41 @@ def register(bot: telebot.TeleBot):
             except Exception:
                 bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
 
+        elif method == "TRC20":
+            user_states.set(call.from_user.id, {
+                "action": "awaiting_trc20_id",
+                "amount_usd": total_cost_usd,
+                "method": "TRC-20",
+                "intent": "direct_pay",
+                "product_id": product_id,
+                "qty": qty
+            })
+            
+            text = (
+                "🔗 <b>TRC-20 (USDT) Payment (Direct Pay)</b>\n\n"
+                f"Product: <b>{product['name']} (x{qty})</b>\n"
+                f"Amount to Pay: <b>${total_cost_usd:.2f} USDT</b>\n"
+                "Network: <b>Tron (TRC-20)</b>\n\n"
+                "━━━━━━━━━━━━━━━━━━━\n"
+                f"<b>Deposit Address:</b>\n<code>{ps.get('trc20_address', 'N/A')}</code>\n"
+                "━━━━━━━━━━━━━━━━━━━\n\n"
+                "Please transfer the exact amount and then <b>enter your Transaction ID (TxID)</b> below 👇"
+            )
+        
+            from config import TRC20_QR_PATH
+            try:
+                with open(TRC20_QR_PATH, "rb") as qr:
+                    bot.send_photo(
+                        chat_id=call.message.chat.id,
+                        photo=qr,
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=cancel_payment_kb()
+                    )
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception:
+                bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
+
         bot.answer_callback_query(call.id)
     
 def process_direct_pay_delivery(bot: telebot.TeleBot, user_id: int, product_id: str, amount_usd: float, method: str):

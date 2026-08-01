@@ -57,11 +57,17 @@ UPI_NAME: str = os.getenv("UPI_NAME", "SURIYAPRAKASH")
 UPI_QR_PATH: str = os.getenv("UPI_QR_PATH", "assets/upi_qr.jpg")
 USD_TO_INR_RATE: float = float(os.getenv("USD_TO_INR_RATE", "100.0"))
 BINANCE_UID: str = os.getenv("BINANCE_UID", "1097309535")
-BEP20_ADDRESS: str = os.getenv("BEP20_ADDRESS", "0xYourAddressHere")
+BEP20_ADDRESS: str = os.getenv("BEP20_ADDRESS", "0x54809A7dd1722eDAed1Dd4977fddd96c5ECbC0D2")
 BEP20_QR_PATH: str = os.getenv("BEP20_QR_PATH", "assets/bep20_qr.jpg")
+
+TRC20_ADDRESS: str = os.getenv("TRC20_ADDRESS", "TFCD3xjAdc3cxyoh2YHZKKng3KqxZgNyMs")
+TRC20_QR_PATH: str = os.getenv("TRC20_QR_PATH", "assets/trc20_qr.jpg")
 
 BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")
+
+BSCSCAN_API_KEY: str = os.getenv("BSCSCAN_API_KEY", "")
+TRONGRID_API_KEY: str = os.getenv("TRONGRID_API_KEY", "")
 
 # ── Bot username (used for referral links) ───────────────────────────────
 BOT_USERNAME: str = os.getenv("BOT_USERNAME", "linkedinpremiumstore_bot")

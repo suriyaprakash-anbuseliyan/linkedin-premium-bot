@@ -187,3 +187,51 @@ def register(bot: telebot.TeleBot):
                 parse_mode="HTML",
                 reply_markup=cancel_payment_kb(),
             )
+
+    # ── TRC-20 payment instructions ─────────────────────────────────
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("pay:trc20:"))
+    def cb_pay_trc20(call: telebot.types.CallbackQuery):
+        try:
+            amount_usd = float(call.data.split(":")[2])
+        except ValueError:
+            bot.answer_callback_query(call.id, "Invalid amount", show_alert=True)
+            return
+
+        user_states.set(call.from_user.id, {
+            "action": "awaiting_trc20_id",
+            "amount_usd": amount_usd,
+            "method": "TRC-20",
+            "intent": "add_to_wallet"
+        })
+
+        ps = get_payment_settings()
+        text = (
+            "🔗 <b>TRC-20 (USDT) Payment</b>\n\n"
+            f"Amount to Pay: <b>${amount_usd:.2f} USDT</b>\n"
+            "Network: <b>Tron (TRC-20)</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>Deposit Address:</b>\n<code>{ps.get('trc20_address')}</code>\n"
+            "━━━━━━━━━━━━━━━━━━━\n\n"
+            "Please transfer the exact amount and then <b>enter your Transaction ID (TxID)</b> below 👇"
+        )
+        
+        from config import TRC20_QR_PATH
+        try:
+            with open(TRC20_QR_PATH, "rb") as qr:
+                bot.send_photo(
+                    chat_id=call.message.chat.id,
+                    photo=qr,
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=cancel_payment_kb()
+                )
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception as e:
+            logger.warning(f"Could not open TRC-20 QR at {TRC20_QR_PATH}: {e}")
+            bot.edit_message_text(
+                text,
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=cancel_payment_kb(),
+            )
