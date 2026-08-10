@@ -3,12 +3,26 @@ keyboards/inline.py
 ───────────────────
 Every inline keyboard the bot uses, in one place.
 Callback data uses a simple prefix convention:
-    section:action:param
 """
-
-from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
+from __future__ import annotations
+from telebot.types import InlineKeyboardButton as OriginalInlineKeyboardButton, InlineKeyboardMarkup
 from config import REQUIRED_CHANNEL_LINK
 from utils.helpers import btn_config
+
+
+class InlineKeyboardButton(OriginalInlineKeyboardButton):
+    def __init__(self, *args, **kwargs):
+        self._style = kwargs.pop('style', None)
+        self._icon_custom_emoji_id = kwargs.pop('icon_custom_emoji_id', None)
+        super().__init__(*args, **kwargs)
+
+    def to_dict(self):
+        d = super().to_dict()
+        if self._style:
+            d['style'] = self._style
+        if self._icon_custom_emoji_id:
+            d['icon_custom_emoji_id'] = self._icon_custom_emoji_id
+        return d
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
@@ -269,6 +283,8 @@ def payment_settings_kb() -> InlineKeyboardMarkup:
     binance_status = "🟢 ON" if settings.get("binance_enabled", True) else "🔴 OFF"
     bep20_status = "🟢 ON" if settings.get("bep20_enabled", True) else "🔴 OFF"
     trc20_status = "🟢 ON" if settings.get("trc20_enabled", True) else "🔴 OFF"
+    bep20_qr_status = "🟢 SHOW QR" if settings.get("bep20_qr_enabled", True) else "🔴 HIDE QR"
+    trc20_qr_status = "🟢 SHOW QR" if settings.get("trc20_qr_enabled", True) else "🔴 HIDE QR"
     
     kb.add(
         InlineKeyboardButton(f"💳 UPI: {upi_status}", callback_data="admset:toggle_upi"),
@@ -277,6 +293,10 @@ def payment_settings_kb() -> InlineKeyboardMarkup:
     kb.add(
         InlineKeyboardButton(f"🔗 BEP-20: {bep20_status}", callback_data="admset:toggle_bep20"),
         InlineKeyboardButton(f"🔗 TRC-20: {trc20_status}", callback_data="admset:toggle_trc20")
+    )
+    kb.add(
+        InlineKeyboardButton(f"🖼 BEP-20 QR: {bep20_qr_status}", callback_data="admset:toggle_bep20_qr"),
+        InlineKeyboardButton(f"🖼 TRC-20 QR: {trc20_qr_status}", callback_data="admset:toggle_trc20_qr")
     )
     kb.add(
         InlineKeyboardButton("💳 Edit UPI ID", callback_data="admset:upi_id"),

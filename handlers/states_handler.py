@@ -688,6 +688,7 @@ def _handle_payment_submission(
         product_id=state.get("product_id"),
         utr_number=utr_number,
         binance_order_id=binance_order_id or bep20_tx_id or trc20_tx_id, # store TxID here for duplication prevention
+        qty=state.get("qty", 1),
     )
     user_states.clear(user_id)
     logger.info(
@@ -739,7 +740,7 @@ def _handle_payment_submission(
             prod = get_product(product_id) if product_id else None
             prod_name = prod["name"] if prod else "Unknown Product"
             
-            process_direct_pay_delivery(bot, user_id, product_id, state.get("amount_usd", 0.0), state["method"])
+            process_direct_pay_delivery(bot, user_id, product_id, state.get("amount_usd", 0.0), state["method"], qty=state.get("qty", 1))
             
             # Notify admin of auto-approval
             txn = binance_order_id or bep20_tx_id or trc20_tx_id or "N/A"
@@ -2240,10 +2241,15 @@ def _handle_admin_upload_qr(bot: telebot.TeleBot, message: telebot.types.Message
         downloaded_file = bot.download_file(file_info.file_path)
         
         # Save based on type
-        from config import UPI_QR_PATH, BEP20_QR_PATH
+        from config import UPI_QR_PATH, BEP20_QR_PATH, TRC20_QR_PATH
         import os
         
-        save_path = UPI_QR_PATH if qr_type == "UPI" else BEP20_QR_PATH
+        if qr_type == "UPI":
+            save_path = UPI_QR_PATH
+        elif qr_type == "BEP-20":
+            save_path = BEP20_QR_PATH
+        else:
+            save_path = TRC20_QR_PATH
         
         # Ensure directory exists
         os.makedirs(os.path.dirname(save_path), exist_ok=True)

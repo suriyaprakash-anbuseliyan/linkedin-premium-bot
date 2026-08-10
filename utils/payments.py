@@ -65,62 +65,67 @@ def verify_binance_pay_transaction(order_id: str, expected_amount: float) -> boo
         return False
 
 def verify_bep20_deposit_transaction(tx_id: str, expected_amount: float) -> bool:
-    from config import BSCSCAN_API_KEY, BEP20_ADDRESS
+    from database import get_payment_settings
+    ps = get_payment_settings()
+    BEP20_ADDRESS = ps.get('bep20_address', '')
+    import requests
     
-    # Etherscan API V2 Endpoint for BEP-20 (BSC chainid=56) token transfers
-    url = "https://api.etherscan.io/v2/api"
-    params = {
-        "chainid": 56,
-        "module": "account",
-        "action": "tokentx",
-        "address": BEP20_ADDRESS,
-        "page": 1,
-        "offset": 50,  # check the last 50 transactions
-        "sort": "desc",
-        "apikey": BSCSCAN_API_KEY
+    rpc_url = "https://bsc-dataseed.binance.org/"
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "eth_getTransactionReceipt",
+        "params": [tx_id],
+        "id": 1
     }
     
     try:
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.post(rpc_url, json=payload, timeout=10)
         data = r.json()
+        receipt = data.get("result")
         
-        if data.get("status") == "1" and isinstance(data.get("result"), list):
-            for tx in data["result"]:
-                # Check if hash matches
-                if tx.get("hash", "").lower() == tx_id.lower():
-                    # Verify recipient is exactly our address
-                    if tx.get("to", "").lower() != BEP20_ADDRESS.lower():
-                        logger.warning("BEP-20 mismatch: 'to' address %s != %s", tx.get("to"), BEP20_ADDRESS)
-                        return False
-                        
-                    # Verify token is USDT (Binance-Peg BSC-USD)
-                    if tx.get("tokenSymbol", "").upper() != "USDT":
-                        logger.warning("BEP-20 token mismatch: expected USDT, got %s", tx.get("tokenSymbol"))
-                        return False
-                        
-                    # Token amounts are usually 18 decimals on BSC for USDT
-                    token_decimals = int(tx.get("tokenDecimal", 18))
-                    value_wei = float(tx.get("value", 0))
-                    amount = value_wei / (10 ** token_decimals)
-                    
-                    if amount >= expected_amount - 0.01:
-                        logger.info("BEP-20 transaction %s verified successfully.", tx_id)
-                        return True
-                    else:
-                        logger.warning("BEP-20 Amount mismatch: expected %s USDT, got %s", expected_amount, amount)
-                        return False
+        if not receipt:
+            logger.warning("BEP-20 transaction %s not found on RPC.", tx_id)
+            return False
             
-            logger.warning("BEP-20 transaction %s not found in recent deposits.", tx_id)
-        else:
-            logger.error("BscScan API returned error/empty: %s", data.get("message"))
+        if receipt.get("status") != "0x1":
+            logger.warning("BEP-20 transaction %s failed on-chain.", tx_id)
+            return False
             
+        # USDT contract on BSC
+        USDT_CONTRACT = "0x55d398326f99059ff775485246999027b3197955".lower()
+        
+        # Transfer event signature
+        TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+        
+        expected_to_padded = "0x" + BEP20_ADDRESS.lower().replace("0x", "").zfill(64)
+        
+        for log in receipt.get("logs", []):
+            if log.get("address", "").lower() == USDT_CONTRACT:
+                topics = log.get("topics", [])
+                if len(topics) >= 3 and topics[0] == TRANSFER_TOPIC:
+                    to_address = topics[2].lower()
+                    if to_address == expected_to_padded:
+                        value_hex = log.get("data", "0x0")
+                        amount = int(value_hex, 16) / (10 ** 18)
+                        
+                        if amount >= expected_amount - 0.01:
+                            logger.info("BEP-20 transaction %s verified successfully via RPC.", tx_id)
+                            return True
+                        else:
+                            logger.warning("BEP-20 Amount mismatch: expected %s USDT, got %s", expected_amount, amount)
+                            return False
+                            
+        logger.warning("BEP-20 transaction %s verified, but no matching USDT transfer to %s found.", tx_id, BEP20_ADDRESS)
         return False
     except Exception as e:
-        logger.error("Failed to query BscScan API for deposits: %s", e)
+        logger.error("Failed to query BSC RPC for deposit: %s", e)
         return False
 
 def verify_trc20_deposit_transaction(tx_id: str, expected_amount: float) -> bool:
-    from config import TRONGRID_API_KEY, TRC20_ADDRESS
+    from config import TRONGRID_API_KEY
+    from database import get_payment_settings
+    ps = get_payment_settings()
+    TRC20_ADDRESS = ps.get('trc20_address', '')
     
     # TronGrid API Endpoint for TRC-20 token transfers
     url = f"https://api.trongrid.io/v1/accounts/{TRC20_ADDRESS}/transactions/trc20"

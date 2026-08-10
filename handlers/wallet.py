@@ -168,18 +168,27 @@ def register(bot: telebot.TeleBot):
         )
         
         from config import BEP20_QR_PATH
-        try:
-            with open(BEP20_QR_PATH, "rb") as qr:
-                bot.send_photo(
+        if ps.get("bep20_qr_enabled", True):
+            try:
+                with open(BEP20_QR_PATH, "rb") as qr:
+                    bot.send_photo(
+                        chat_id=call.message.chat.id,
+                        photo=qr,
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=cancel_payment_kb()
+                    )
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception as e:
+                logger.warning(f"Could not open BEP-20 QR at {BEP20_QR_PATH}: {e}")
+                bot.edit_message_text(
+                    text,
                     chat_id=call.message.chat.id,
-                    photo=qr,
-                    caption=text,
+                    message_id=call.message.message_id,
                     parse_mode="HTML",
-                    reply_markup=cancel_payment_kb()
+                    reply_markup=cancel_payment_kb(),
                 )
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception as e:
-            logger.warning(f"Could not open BEP-20 QR at {BEP20_QR_PATH}: {e}")
+        else:
             bot.edit_message_text(
                 text,
                 chat_id=call.message.chat.id,
@@ -216,18 +225,27 @@ def register(bot: telebot.TeleBot):
         )
         
         from config import TRC20_QR_PATH
-        try:
-            with open(TRC20_QR_PATH, "rb") as qr:
-                bot.send_photo(
+        if ps.get("trc20_qr_enabled", True):
+            try:
+                with open(TRC20_QR_PATH, "rb") as qr:
+                    bot.send_photo(
+                        chat_id=call.message.chat.id,
+                        photo=qr,
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=cancel_payment_kb()
+                    )
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception as e:
+                logger.warning(f"Could not open TRC-20 QR at {TRC20_QR_PATH}: {e}")
+                bot.edit_message_text(
+                    text,
                     chat_id=call.message.chat.id,
-                    photo=qr,
-                    caption=text,
+                    message_id=call.message.message_id,
                     parse_mode="HTML",
-                    reply_markup=cancel_payment_kb()
+                    reply_markup=cancel_payment_kb(),
                 )
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception as e:
-            logger.warning(f"Could not open TRC-20 QR at {TRC20_QR_PATH}: {e}")
+        else:
             bot.edit_message_text(
                 text,
                 chat_id=call.message.chat.id,

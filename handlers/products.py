@@ -271,7 +271,12 @@ def register(bot: telebot.TeleBot):
             bot.answer_callback_query(call.id, "Please /start first.", show_alert=True)
             return
             
-        total_cost_usd = product.get("price_usd", 0.0) * qty
+        if product.get("bulk_discount_enabled"):
+            from utils.helpers import calculate_bulk_price
+            unit_price = calculate_bulk_price(qty, product.get("price_usd", 0.0), product.get("bulk_discount_text", ""))
+        else:
+            unit_price = product.get("price_usd", 0.0)
+        total_cost_usd = unit_price * qty
         if user.get("wallet_balance", 0.0) < total_cost_usd:
             bot.answer_callback_query(
                 call.id, "❌ Insufficient wallet balance.", show_alert=True,
@@ -304,7 +309,12 @@ def register(bot: telebot.TeleBot):
                 return
             actual_qty = len(claimed_items)
 
-        actual_cost_usd = product.get("price_usd", 0.0) * actual_qty
+        if product.get("bulk_discount_enabled"):
+            from utils.helpers import calculate_bulk_price
+            unit_price = calculate_bulk_price(actual_qty, product.get("price_usd", 0.0), product.get("bulk_discount_text", ""))
+        else:
+            unit_price = product.get("price_usd", 0.0)
+        actual_cost_usd = unit_price * actual_qty
 
         # Deduct wallet balance
         from database import remove_balance
@@ -490,7 +500,12 @@ def register(bot: telebot.TeleBot):
             bot.answer_callback_query(call.id, "Product no longer available.", show_alert=True)
             return
             
-        total_cost_usd = product.get("price_usd", 0.0) * qty
+        if product.get("bulk_discount_enabled"):
+            from utils.helpers import calculate_bulk_price
+            unit_price = calculate_bulk_price(qty, product.get("price_usd", 0.0), product.get("bulk_discount_text", ""))
+        else:
+            unit_price = product.get("price_usd", 0.0)
+        total_cost_usd = unit_price * qty
         
         from database import get_payment_settings
         ps = get_payment_settings()
@@ -579,17 +594,20 @@ def register(bot: telebot.TeleBot):
             )
         
             from config import BEP20_QR_PATH
-            try:
-                with open(BEP20_QR_PATH, "rb") as qr:
-                    bot.send_photo(
-                        chat_id=call.message.chat.id,
-                        photo=qr,
-                        caption=text,
-                        parse_mode="HTML",
-                        reply_markup=cancel_payment_kb()
-                    )
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-            except Exception:
+            if ps.get("bep20_qr_enabled", True):
+                try:
+                    with open(BEP20_QR_PATH, "rb") as qr:
+                        bot.send_photo(
+                            chat_id=call.message.chat.id,
+                            photo=qr,
+                            caption=text,
+                            parse_mode="HTML",
+                            reply_markup=cancel_payment_kb()
+                        )
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                except Exception:
+                    bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
+            else:
                 bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
 
         elif method == "TRC20":
@@ -614,31 +632,31 @@ def register(bot: telebot.TeleBot):
             )
         
             from config import TRC20_QR_PATH
-            try:
-                with open(TRC20_QR_PATH, "rb") as qr:
-                    bot.send_photo(
-                        chat_id=call.message.chat.id,
-                        photo=qr,
-                        caption=text,
-                        parse_mode="HTML",
-                        reply_markup=cancel_payment_kb()
-                    )
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-            except Exception:
+            if ps.get("trc20_qr_enabled", True):
+                try:
+                    with open(TRC20_QR_PATH, "rb") as qr:
+                        bot.send_photo(
+                            chat_id=call.message.chat.id,
+                            photo=qr,
+                            caption=text,
+                            parse_mode="HTML",
+                            reply_markup=cancel_payment_kb()
+                        )
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                except Exception:
+                    bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
+            else:
                 bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=cancel_payment_kb())
 
         bot.answer_callback_query(call.id)
     
-def process_direct_pay_delivery(bot: telebot.TeleBot, user_id: int, product_id: str, amount_usd: float, method: str):
+def process_direct_pay_delivery(bot: telebot.TeleBot, user_id: int, product_id: str, amount_usd: float, method: str, qty: int = 1):
     product = get_product(product_id)
     if not product:
         bot.send_message(user_id, "❌ Product not found during delivery.", reply_markup=back_to_menu_kb())
         return
         
-    qty = 1 # By default, but we should pass qty from the state actually. Wait, state has qty. We need to pass it from _handle_payment_submission.
-    # In states_handler.py, we only passed amount_usd. Let's fix this inside process_direct_pay_delivery or assume we can read user_states before it gets cleared?
-    # No, it's cleared. So we'll have to add qty to the signature, but for now we can infer it.
-    qty = int(amount_usd / product.get('price_usd', 1)) if product.get('price_usd', 0) > 0 else 1
+
     
     is_num = product.get("is_numerical", False)
     claimed_items = []
@@ -659,7 +677,12 @@ def process_direct_pay_delivery(bot: telebot.TeleBot, user_id: int, product_id: 
             
         qty = len(claimed_items)
 
-    actual_cost_usd = product.get("price_usd", 0.0) * qty
+    if product.get("bulk_discount_enabled"):
+        from utils.helpers import calculate_bulk_price
+        unit_price = calculate_bulk_price(qty, product.get("price_usd", 0.0), product.get("bulk_discount_text", ""))
+    else:
+        unit_price = product.get("price_usd", 0.0)
+    actual_cost_usd = unit_price * qty
 
     items_list = [item["content"] for item in claimed_items] if not is_num else [f"Service Order (x{qty})"]
     order_id = create_order(user_id, product["name"], actual_cost_usd, items_list)

@@ -370,7 +370,7 @@ def delete_product_stock(product_id: str) -> int:
 
 def create_payment(user_id: int, username: str, method: str, amount_usd: float,
                    intent: str = "add_to_wallet", product_id: str | None = None,
-                   utr_number: str | None = None, binance_order_id: str | None = None) -> str:
+                   utr_number: str | None = None, binance_order_id: str | None = None, qty: int = 1) -> str:
     """Insert a payment request. Returns the _id as string."""
     doc = {
         "user_id": user_id,
@@ -379,6 +379,7 @@ def create_payment(user_id: int, username: str, method: str, amount_usd: float,
         "amount_usd": amount_usd,
         "intent": intent,
         "product_id": product_id,
+        "qty": qty,
         "utr_number": utr_number,
         "binance_order_id": binance_order_id,
         "status": "pending",
@@ -401,7 +402,7 @@ def get_pending_payments() -> list[dict]:
 def approve_payment(payment_id) -> dict | None:
     from bson import ObjectId
     return payments_col.find_one_and_update(
-        {"_id": ObjectId(payment_id)},
+        {"_id": ObjectId(payment_id), "status": "pending"},
         {"$set": {"status": "approved", "reviewed_at": datetime.now(timezone.utc)}},
         return_document=True,
     )
@@ -410,7 +411,7 @@ def approve_payment(payment_id) -> dict | None:
 def reject_payment(payment_id) -> dict | None:
     from bson import ObjectId
     return payments_col.find_one_and_update(
-        {"_id": ObjectId(payment_id)},
+        {"_id": ObjectId(payment_id), "status": "pending"},
         {"$set": {"status": "rejected", "reviewed_at": datetime.now(timezone.utc)}},
         return_document=True,
     )
@@ -487,7 +488,9 @@ def get_payment_settings() -> dict:
         "upi_enabled": doc.get("upi_enabled", True),
         "binance_enabled": doc.get("binance_enabled", True),
         "bep20_enabled": doc.get("bep20_enabled", True),
-        "trc20_enabled": doc.get("trc20_enabled", True)
+        "trc20_enabled": doc.get("trc20_enabled", True),
+        "bep20_qr_enabled": doc.get("bep20_qr_enabled", True),
+        "trc20_qr_enabled": doc.get("trc20_qr_enabled", True)
     }
 
 

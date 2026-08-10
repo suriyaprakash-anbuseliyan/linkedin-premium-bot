@@ -980,7 +980,7 @@ def register(bot: telebot.TeleBot):
         elif intent == "direct_pay":
             from handlers.products import process_direct_pay_delivery
             logger.info("Payment approved (Direct Pay): user=%s amount_usd=%s by admin", user_id, amount_usd)
-            process_direct_pay_delivery(bot, user_id, payment.get("product_id"), amount_usd, payment.get("method", "Manual"))
+            process_direct_pay_delivery(bot, user_id, payment.get("product_id"), amount_usd, payment.get("method", "Manual"), qty=payment.get("qty", 1))
 
         # Update admin message
         bot.edit_message_text(
@@ -1433,12 +1433,62 @@ def register(bot: telebot.TeleBot):
         bot.answer_callback_query(call.id, f"BEP-20 Payment {'Enabled' if new_val else 'Disabled'}", show_alert=True)
         cb_payment_settings(call)
         
-    @bot.callback_query_handler(func=lambda c: c.data in ["admset:upload_upi_qr", "admset:upload_bep20_qr"])
+    @bot.callback_query_handler(func=lambda c: c.data == "admset:toggle_trc20")
+    def cb_toggle_trc20(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        ps = get_payment_settings()
+        new_val = not ps.get("trc20_enabled", True)
+        from database import settings_col
+        settings_col.update_one(
+            {"_id": "payment_settings"},
+            {"$set": {"trc20_enabled": new_val}},
+            upsert=True
+        )
+        bot.answer_callback_query(call.id, f"TRC-20 Payment {'Enabled' if new_val else 'Disabled'}", show_alert=True)
+        cb_payment_settings(call)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "admset:toggle_bep20_qr")
+    def cb_toggle_bep20_qr(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        ps = get_payment_settings()
+        new_val = not ps.get("bep20_qr_enabled", True)
+        from database import settings_col
+        settings_col.update_one(
+            {"_id": "payment_settings"},
+            {"$set": {"bep20_qr_enabled": new_val}},
+            upsert=True
+        )
+        bot.answer_callback_query(call.id, f"BEP-20 QR {'Shown' if new_val else 'Hidden'}", show_alert=True)
+        cb_payment_settings(call)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "admset:toggle_trc20_qr")
+    def cb_toggle_trc20_qr(call: telebot.types.CallbackQuery):
+        if not _admin_only(call):
+            return
+        ps = get_payment_settings()
+        new_val = not ps.get("trc20_qr_enabled", True)
+        from database import settings_col
+        settings_col.update_one(
+            {"_id": "payment_settings"},
+            {"$set": {"trc20_qr_enabled": new_val}},
+            upsert=True
+        )
+        bot.answer_callback_query(call.id, f"TRC-20 QR {'Shown' if new_val else 'Hidden'}", show_alert=True)
+        cb_payment_settings(call)
+        
+    @bot.callback_query_handler(func=lambda c: c.data in ["admset:upload_upi_qr", "admset:upload_bep20_qr", "admset:upload_trc20_qr"])
     def cb_upload_qr(call: telebot.types.CallbackQuery):
         if not _admin_only(call):
             return
         
-        qr_type = "UPI" if "upi" in call.data else "BEP-20"
+        if "upi" in call.data:
+            qr_type = "UPI"
+        elif "bep20" in call.data:
+            qr_type = "BEP-20"
+        else:
+            qr_type = "TRC-20"
         
         user_states.set(call.from_user.id, {
             "action": "admin_upload_qr",
