@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 utils/helpers.py
 ────────────────
@@ -73,16 +75,78 @@ def format_datetime(dt: datetime | None) -> str:
     return dt.strftime("%d %b %Y, %H:%M UTC")
 
 
+def is_account_block(lines: list[str]) -> bool:
+    """
+    Detect whether a multi-line block represents a single account/service credential
+    (e.g., Mail, OTP, Profile, PIN, Password, etc.) rather than a list of distinct links.
+    """
+    if len(lines) <= 1:
+        return False
+    # If every line is a standalone URL, it is a list of links, not an account block
+    if all(re.match(r"^https?://\S+$", l.strip()) for l in lines if l.strip()):
+        return False
+    # If every line is a single word/code with no spaces and no URLs, it's a list of codes
+    if all(" " not in l.strip() and not re.search(r"https?://", l) for l in lines if l.strip()):
+        return False
+
+    account_keywords = {
+        "mail", "email", "otp", "profile", "bin", "pin", "pass", "password",
+        "account", "user", "username", "login", "credentials", "vaultapp"
+    }
+    has_kw = any(any(kw in l.lower() for kw in account_keywords) for l in lines)
+    has_labels = any(re.search(r"^[A-Za-z0-9_\s]{2,20}\s*:\s*\S+", l) for l in lines)
+    return has_kw or has_labels
+
+
 def extract_all_links(text: str) -> list[str]:
-    """Extract stock items from raw text. They can be URLs or any text strings."""
-    import re
+    """
+    Extract stock items from raw text. They can be URLs, accounts, or any text strings.
+    
+    1. If the text contains '---' (or '===') separators, each block between separators
+       is treated as a SINGLE multi-line stock item.
+    2. If the text has blocks separated by blank lines (\\n\\s*\\n), check if the blocks
+       represent multi-line accounts. If so, each block is 1 stock item.
+    3. If the entire text has no separator or blank lines, but has multiple lines
+       describing an account (e.g. Mail, OTP, Profile, BIN/PIN), the whole block is 1 stock item.
+    4. Otherwise (traditional single-line items like LinkedIn links, coupon codes):
+       Each line is a separate item.
+    """
+    text = text.strip()
+    if not text:
+        return []
+
+    # 1. Separator line: --- or === or ___
+    if re.search(r"(?:^|\n)\s*[-=_]{3,}\s*(?:\n|$)", text):
+        blocks = re.split(r"(?:^|\n)\s*[-=_]{3,}\s*(?:\n|$)", text)
+        items = [b.strip() for b in blocks if b.strip()]
+        if items:
+            return items
+
+    # 2. Double-newline blocks
+    blocks = re.split(r"\n\s*\n+", text)
+    if len(blocks) > 1:
+        any_multi = any(is_account_block(b.strip().splitlines()) for b in blocks if b.strip())
+        if any_multi:
+            items = []
+            for b in blocks:
+                b = b.strip()
+                if not b:
+                    continue
+                lines = [l.strip() for l in b.splitlines() if l.strip()]
+                if is_account_block(lines):
+                    items.append(b)
+                else:
+                    items.extend(lines)
+            return items
+
+    # 3. Single block with multiple lines
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    if is_account_block(lines):
+        return [text]
+
+    # 4. Standard single-line items (URLs or single-line codes)
     items = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        
-        # If the line contains http/https, extract the URLs
+    for line in lines:
         if "http://" in line or "https://" in line:
             pattern = r'(https?://[^\s]+)'
             matches = re.findall(pattern, line)
@@ -91,8 +155,6 @@ def extract_all_links(text: str) -> list[str]:
             else:
                 items.append(line)
         else:
-            # It's a regular string (like a coupon code, username/password)
-            # Take the whole line as a single stock item
             items.append(line)
     return items
 

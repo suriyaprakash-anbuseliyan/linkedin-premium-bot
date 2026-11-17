@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 handlers/products.py
 ────────────────────
@@ -381,14 +383,19 @@ def register(bot: telebot.TeleBot):
                 reply_markup=reply_markup,
             )
         else:
-            links_text = "\n\n".join(
-                f"🔗 {item['content']}\n"
-                f"⏰ Expires: {item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'}"
-                for item in claimed_items
-            )
+            def _format_stock_item(content: str, index: int, total: int) -> str:
+                """Format a stock item for delivery. Multi-line items get a header."""
+                if '\n' in content:
+                    if total > 1:
+                        return f"📋 <b>Item {index}:</b>\n{content}"
+                    else:
+                        return f"📋 <b>Account Details:</b>\n{content}"
+                return f"🔗 {content}"
+            links_text = "\n\n".join(_format_stock_item(item['content'], i+1, len(claimed_items)) for i, item in enumerate(claimed_items))
             product_exp_days = product.get("expiration_days", del_settings.get("expiration_days", 7))
             warn_text = del_settings.get("expiration_warning", "⚠️ <i>Use these links within {days} days before they expire.</i>").replace("{days}", str(product_exp_days))
-            links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n{warn_text}\n\n"
+            exp_date = claimed_items[0].get('expires_at').strftime('%d %b %Y, %H:%M UTC') if claimed_items and claimed_items[0].get('expires_at') else 'N/A'
+            links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n⏰ <b>Expires:</b> {exp_date}\n{warn_text}\n\n"
 
             text = (
                 "✅ <b>Purchase Successful!</b>\n\n"
@@ -416,10 +423,10 @@ def register(bot: telebot.TeleBot):
                 import io
                 
                 # Format links for the text file
-                file_content = f"Purchase: {product['name']} (x{actual_qty})\n\n"
+                exp = claimed_items[0].get('expires_at').strftime('%d %b %Y, %H:%M UTC') if claimed_items and claimed_items[0].get('expires_at') else 'N/A'
+                file_content = f"Purchase: {product['name']} (x{actual_qty})\nExpires: {exp}\n\n"
                 for item in claimed_items:
-                    exp = item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'
-                    file_content += f"Link: {item['content']}\nExpires: {exp}\n\n"
+                    file_content += f"Link: {item['content']}\n"
                     
                 doc = io.BytesIO(file_content.encode('utf-8'))
                 doc.name = f"Order_{order_id}_links.txt"
@@ -716,12 +723,17 @@ def process_direct_pay_delivery(bot: telebot.TeleBot, user_id: int, product_id: 
         text = f"✅ <b>Purchase Successful! ({method})</b>\n\n📦 <b>{product['name']}</b> (x{qty})\n\n{qr_text}{delivery_msg}"
         msg = bot.send_message(user_id, text, parse_mode="HTML", reply_markup=reply_markup)
     else:
-        links_text = "\n\n".join(
-            f"🔗 {item['content']}\n⏰ Expires: {item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'}"
-            for item in claimed_items
-        )
+        def _format_stock_item_dp(content: str, index: int, total: int) -> str:
+            if '\n' in content:
+                if total > 1:
+                    return f"📋 <b>Item {index}:</b>\n{content}"
+                else:
+                    return f"📋 <b>Account Details:</b>\n{content}"
+            return f"🔗 {content}"
+        links_text = "\n\n".join(_format_stock_item_dp(item['content'], i+1, len(claimed_items)) for i, item in enumerate(claimed_items))
         warn_text = del_settings.get("expiration_warning", "⚠️ <i>Use these links within 7 days before they expire.</i>")
-        links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n{warn_text}\n\n"
+        exp_date = claimed_items[0].get('expires_at').strftime('%d %b %Y, %H:%M UTC') if claimed_items and claimed_items[0].get('expires_at') else 'N/A'
+        links_block = f"━━━━━━━━━━━━━━━━━━━\n{links_text}\n━━━━━━━━━━━━━━━━━━━\n\n⏰ <b>Expires:</b> {exp_date}\n{warn_text}\n\n"
         
         text = f"✅ <b>Purchase Successful! ({method})</b>\n\n📦 <b>{product['name']}</b> (x{qty})\n\n{links_block}{qr_text}{delivery_msg}"
         
@@ -730,10 +742,10 @@ def process_direct_pay_delivery(bot: telebot.TeleBot, user_id: int, product_id: 
             msg = bot.send_message(user_id, brief_text, parse_mode="HTML", reply_markup=reply_markup)
             
             import io
-            file_content = f"Purchase: {product['name']} (x{qty})\n\n"
+            exp = claimed_items[0].get('expires_at').strftime('%d %b %Y, %H:%M UTC') if claimed_items and claimed_items[0].get('expires_at') else 'N/A'
+            file_content = f"Purchase: {product['name']} (x{qty})\nExpires: {exp}\n\n"
             for item in claimed_items:
-                exp = item.get('expires_at').strftime('%d %b %Y, %H:%M UTC') if item.get('expires_at') else 'N/A'
-                file_content += f"Link: {item['content']}\nExpires: {exp}\n\n"
+                file_content += f"Link: {item['content']}\n"
             doc = io.BytesIO(file_content.encode('utf-8'))
             doc.name = f"Order_{order_id}_links.txt"
             bot.send_document(user_id, document=doc, caption=warn_text, parse_mode="HTML")

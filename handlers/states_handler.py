@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 handlers/states_handler.py
 ──────────────────────────
@@ -1025,10 +1027,12 @@ def _handle_add_stock(
         bot.send_message(
             user_id,
             f"📦 <b>Multi-Message Stock Mode — {product_name}</b>\n\n"
-            "Send your links in <b>multiple messages</b>.\n"
+            "Send your items in <b>multiple messages</b>.\n"
             "When you're done, type <b>done</b> to finish.\n\n"
             "💡 This mode bypasses Telegram's message limit.\n"
-            "You can also upload a <b>.csv</b> or <b>.txt</b> file.",
+            "You can also upload a <b>.csv</b> or <b>.txt</b> file.\n\n"
+            "<b>🔹 Multi-line items:</b> Use <code>---</code> on a\n"
+            "separate line to separate items.",
             parse_mode="HTML",
             reply_markup=admin_back_kb(),
         )

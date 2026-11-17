@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 handlers/admin.py
 ─────────────────
@@ -770,18 +772,29 @@ def register(bot: telebot.TeleBot):
         dup_text = "⚠️ <b>Duplicate links WILL BE ADDED</b>." if allow_duplicates else "🔄 Duplicate links are automatically skipped."
         bot.edit_message_text(
             f"📦 <b>Add Stock — {product['name']}</b>\n\n"
-            "<b>Option 1:</b> Paste links below, <b>one per line</b>.\n"
-            "You can paste many links at once.\n\n"
-            "<b>Option 2:</b> Type <b>multi</b> to send links\n"
+            "<b>Option 1:</b> Paste items below, <b>one per line</b>.\n"
+            "You can paste many items at once.\n\n"
+            "<b>Option 2:</b> Type <b>multi</b> to send items\n"
             "across multiple messages (bypasses Telegram's\n"
             "4096-char limit).\n\n"
             "<b>Option 3:</b> Upload a <b>.csv</b> or <b>.txt</b> file\n"
-            "containing your links.\n\n"
+            "containing your items.\n\n"
+            "<b>🔹 Multi-line items:</b> Use <code>---</code> on a\n"
+            "separate line to separate items. Each block\n"
+            "between <code>---</code> = 1 stock item.\n\n"
             f"{dup_text}\n\n"
-            "Example:\n"
+            "Example (single-line items):\n"
             "<code>https://example.com/link1\n"
             "PROMO-CODE-123\n"
-            "username:password</code>",
+            "username:password</code>\n\n"
+            "Example (multi-line items):\n"
+            "<code>Mail: user@mail.com\n"
+            "Pass: abc123\n"
+            "Profile: 2\n"
+            "---\n"
+            "Mail: user2@mail.com\n"
+            "Pass: xyz456\n"
+            "Profile: 1</code>",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             parse_mode="HTML",
