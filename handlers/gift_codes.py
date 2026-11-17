@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import telebot
 from database import redeem_gift_code
 from keyboards.inline import back_to_menu_kb
